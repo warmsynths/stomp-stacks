@@ -47,18 +47,10 @@ export const stickerCard = css`
   }
 `;
 
-export const modalScrim = css`
-  .scrim {
-    position: fixed;
-    inset: 0;
-    background: rgba(22, 50, 61, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 80;
-    padding: 20px;
-    animation: scrimIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
+/** @keyframes are scoped to whichever shadow root defines them — they don't
+ * pierce shadow boundaries like custom properties do — so every component
+ * that animates needs this included in its own `static styles`. */
+export const motionKeyframes = css`
   @keyframes scrimIn {
     from {
       opacity: 0;
@@ -77,13 +69,46 @@ export const modalScrim = css`
       transform: scale(1) rotate(0);
     }
   }
-  .sheet-in {
-    animation: sheetIn 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  @keyframes stepIn {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     * {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
+  }
+`;
+
+export const modalScrim = css`
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(22, 50, 61, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 80;
+    padding: 20px;
+    animation: scrimIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .sheet-in {
+    animation: sheetIn 200ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 `;

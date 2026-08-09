@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { tokens, resetAndButton } from '../styles/shared.js';
+import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
 import { ACTIONS } from '../data/controllers.js';
 import { DEVICES, valueOptionsFor } from '../data/devices.js';
 import { MAX_STEPS } from '../state/store.js';
@@ -17,6 +17,7 @@ export class MacroPanel extends LitElement {
   static styles = [
     tokens,
     resetAndButton,
+    motionKeyframes,
     css`
       :host {
         display: flex;
@@ -27,6 +28,9 @@ export class MacroPanel extends LitElement {
         width: 340px;
         flex: none;
         border-left: 2.5px solid var(--ink);
+      }
+      :host([desktop]) {
+        width: 380px;
       }
       :host([phone]) {
         flex: none;
@@ -52,6 +56,9 @@ export class MacroPanel extends LitElement {
         background: var(--panel-warm);
         border-bottom: 2.5px solid var(--ink);
       }
+      :host([desktop]) .head {
+        padding: 15px 18px 13px;
+      }
       .head-row {
         display: flex;
         align-items: center;
@@ -63,6 +70,9 @@ export class MacroPanel extends LitElement {
         font-size: 15.5px;
         font-weight: 600;
         letter-spacing: -0.02em;
+      }
+      :host([desktop]) .title {
+        font-size: 16px;
       }
       .capacity {
         font-family: var(--mono);
@@ -117,6 +127,10 @@ export class MacroPanel extends LitElement {
         padding: 13px 16px;
         border-bottom: 2.5px solid var(--ink);
         background: var(--popover-bg);
+        animation: sheetIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      :host([desktop]) .popover {
+        padding: 15px 18px;
       }
       .popover-head {
         display: flex;
@@ -172,16 +186,56 @@ export class MacroPanel extends LitElement {
         gap: 8px;
         background: var(--card);
       }
+      :host([desktop]) .list {
+        padding: 14px;
+        gap: 9px;
+      }
       .empty {
         text-align: center;
         padding: 24px 18px;
         border-radius: 18px;
         border: 2.5px dashed rgba(22, 50, 61, 0.3);
       }
+      :host([desktop]) .empty {
+        padding: 30px 22px;
+        border-radius: 20px;
+      }
+      .creature {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 13px;
+        border-radius: 14px;
+        background: var(--sky);
+        border: 2.5px solid var(--ink);
+        position: relative;
+        animation: bob 2.6s ease-in-out infinite;
+      }
+      .creature-eye {
+        position: absolute;
+        top: 16px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--ink);
+      }
+      .creature-mouth {
+        position: absolute;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        width: 14px;
+        height: 7px;
+        border-bottom: 2.5px solid var(--ink);
+        border-radius: 0 0 14px 14px;
+      }
       .empty-title {
         font-size: 13.5px;
         font-weight: 600;
         margin-bottom: 4px;
+      }
+      :host([desktop]) .empty-title {
+        font-size: 14px;
+        margin-bottom: 5px;
       }
       .empty-body {
         font-size: 12.5px;
@@ -253,6 +307,12 @@ export class MacroPanel extends LitElement {
         line-height: 1;
         transition: background 140ms ease;
       }
+      :host([desktop]) .nav-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        font-size: 11px;
+      }
       .nav-btn[disabled] {
         opacity: 0.25;
         pointer-events: none;
@@ -264,6 +324,19 @@ export class MacroPanel extends LitElement {
         border: 2px solid var(--ink);
         font-size: 13px;
         line-height: 1;
+        transition:
+          background 140ms ease,
+          color 140ms ease;
+      }
+      .remove-btn:hover {
+        background: var(--coral);
+        color: var(--card);
+      }
+      :host([desktop]) .remove-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        font-size: 12px;
       }
       .full-notice {
         padding: 9px 13px;
@@ -277,6 +350,7 @@ export class MacroPanel extends LitElement {
 
   @property({ attribute: false }) store!: StompStore;
   @property({ type: Boolean, reflect: true }) phone = false;
+  @property({ type: Boolean, reflect: true }) desktop = false;
 
   private storeController!: StoreController;
 
@@ -361,6 +435,15 @@ export class MacroPanel extends LitElement {
               ${list.length === 0
                 ? html`
                     <div class="empty">
+                      ${this.desktop
+                        ? html`
+                            <div class="creature">
+                              <span class="creature-eye" style="left:11px"></span>
+                              <span class="creature-eye" style="right:11px"></span>
+                              <span class="creature-mouth"></span>
+                            </div>
+                          `
+                        : null}
                       <div class="empty-title">nothing stacked yet</div>
                       <div class="empty-body">
                         ${this.phone ? 'tap' : 'poke'} any knob or switch on the pedal${this.phone ? ' above' : ''}. mix pedals freely — up to 8

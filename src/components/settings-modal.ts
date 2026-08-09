@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { tokens, resetAndButton, modalScrim } from '../styles/shared.js';
+import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { FaceMode } from '../state/types.js';
@@ -18,6 +18,7 @@ export class SettingsModal extends LitElement {
     tokens,
     resetAndButton,
     modalScrim,
+    motionKeyframes,
     css`
       .panel {
         width: 440px;

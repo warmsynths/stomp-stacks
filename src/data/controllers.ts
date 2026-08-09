@@ -8,8 +8,10 @@ export interface ControllerDef {
   /** Switch cap positions, percent of the strip, one pair per key. */
   x: number[];
   y: number[];
-  /** Strip height in px (same across breakpoints). */
+  /** Strip height in px, tablet/phone. */
   height: number;
+  /** Strip height in px, desktop — taller because the bank row sits above it. */
+  heightDesktop: number;
   banks: number;
   screen: boolean;
 }
@@ -23,6 +25,7 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     x: [14, 38, 62, 86],
     y: [42, 42, 42, 42],
     height: 74,
+    heightDesktop: 80,
     banks: 4,
     screen: false,
   },
@@ -34,6 +37,7 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     x: [26, 74, 50],
     y: [74, 74, 14],
     height: 158,
+    heightDesktop: 170,
     banks: 3,
     screen: true,
   },

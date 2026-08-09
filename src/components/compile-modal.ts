@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { tokens, resetAndButton, modalScrim } from '../styles/shared.js';
+import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
 import { CONTROLLERS } from '../data/controllers.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
@@ -8,17 +8,16 @@ import { compileConfig, compileLines } from '../compiler/midi.js';
 import { downloadJson } from '../compiler/download.js';
 
 /** "cook it up" result: a readable preview of the compiled MIDI messages, and
- * a button that downloads the actual preset config.json. */
+ * a button that downloads the actual preset config.json. Docks as a bottom
+ * sheet on tablet/phone (Mobile) and floats centered on desktop (Whimsy). */
 @customElement('compile-modal')
 export class CompileModal extends LitElement {
   static styles = [
     tokens,
     resetAndButton,
     modalScrim,
+    motionKeyframes,
     css`
-      .scrim {
-        align-items: flex-end;
-      }
       .panel {
         width: 100%;
         max-width: 620px;
@@ -30,21 +29,41 @@ export class CompileModal extends LitElement {
         border-radius: 24px 24px 0 0;
         overflow: hidden;
       }
+      :host([desktop]) .scrim {
+        align-items: center;
+      }
+      :host([desktop]) .panel {
+        width: 680px;
+        max-width: 92vw;
+        max-height: none;
+        border-radius: 26px;
+        box-shadow: 8px 8px 0 var(--ink);
+      }
       .head {
         flex: none;
         padding: 20px 20px 16px;
         border-bottom: 2.5px solid var(--ink);
         background: var(--panel-warm);
       }
+      :host([desktop]) .head {
+        padding: 24px 26px 18px;
+      }
       .head-title {
         font-size: 18px;
         font-weight: 600;
         letter-spacing: -0.02em;
       }
+      :host([desktop]) .head-title {
+        font-size: 20px;
+      }
       .head-meta {
         font-size: 12px;
         opacity: 0.65;
         margin-top: 4px;
+      }
+      :host([desktop]) .head-meta {
+        font-size: 12.5px;
+        margin-top: 5px;
       }
       .lines {
         flex: 1;
@@ -55,6 +74,13 @@ export class CompileModal extends LitElement {
         font-size: 11px;
         line-height: 1.75;
       }
+      :host([desktop]) .lines {
+        flex: none;
+        max-height: 320px;
+        padding: 16px 26px;
+        font-size: 11.5px;
+        line-height: 1.8;
+      }
       .foot {
         flex: none;
         display: flex;
@@ -62,12 +88,26 @@ export class CompileModal extends LitElement {
         padding: 14px 20px 20px;
         border-top: 2.5px solid var(--ink);
       }
+      :host([desktop]) .foot {
+        justify-content: flex-end;
+        padding: 18px 26px;
+      }
       .btn-close {
         flex: 1;
         padding: 12px;
         border-radius: 20px;
         border: 2.5px solid var(--ink);
         font-size: 14px;
+      }
+      :host([desktop]) .btn-close {
+        flex: none;
+        padding: 10px 16px;
+        border: 0;
+        opacity: 0.6;
+        transition: opacity 150ms ease;
+      }
+      :host([desktop]) .btn-close:hover {
+        opacity: 1;
       }
       .btn-grab {
         flex: 2;
@@ -86,10 +126,20 @@ export class CompileModal extends LitElement {
         transform: translate(2px, 2px);
         box-shadow: 0 0 0 var(--ink);
       }
+      :host([desktop]) .btn-grab {
+        flex: none;
+        padding: 10px 20px;
+        border-radius: 22px;
+        box-shadow: 3px 3px 0 var(--ink);
+      }
+      :host([desktop]) .btn-grab:active {
+        box-shadow: 1px 1px 0 var(--ink);
+      }
     `,
   ];
 
   @property({ attribute: false }) store!: StompStore;
+  @property({ type: Boolean, reflect: true }) desktop = false;
   private storeController!: StoreController;
 
   connectedCallback() {

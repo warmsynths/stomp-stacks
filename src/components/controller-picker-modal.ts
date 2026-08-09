@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { tokens, resetAndButton, modalScrim } from '../styles/shared.js';
+import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
 import { CONTROLLERS, CONTROLLER_ORDER } from '../data/controllers.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
@@ -13,6 +13,7 @@ export class ControllerPickerModal extends LitElement {
     tokens,
     resetAndButton,
     modalScrim,
+    motionKeyframes,
     css`
       .panel {
         width: 470px;

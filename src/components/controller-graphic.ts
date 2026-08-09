@@ -7,7 +7,11 @@ import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
 /** "controller · name · change" affordance plus the physical strip graphic
- * (screen for controllers that have one, and a cap per foot switch). */
+ * (screen for controllers that have one, and a cap per foot switch).
+ *
+ * On desktop the bank tabs live in a dark row built into the top of the
+ * strip itself (Whimsy); on tablet/phone they live in the app header
+ * instead, so the strip is plain (Mobile) — toggled by the `desktop` prop. */
 @customElement('controller-graphic')
 export class ControllerGraphic extends LitElement {
   static styles = [
@@ -31,15 +35,50 @@ export class ControllerGraphic extends LitElement {
         font-weight: 600;
         letter-spacing: -0.02em;
       }
+      :host([desktop]) .name {
+        font-size: 16px;
+      }
       .change {
         font-size: 11px;
         opacity: 0.5;
+      }
+      .bank-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 16px 16px 0 0;
+        background: var(--ink);
+      }
+      .bank-row-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--paper);
+        opacity: 0.5;
+        padding-left: 6px;
+        margin-right: 2px;
+      }
+      .bank-chip {
+        flex: 1;
+        white-space: nowrap;
+        padding: 5px 0;
+        border-radius: 11px;
+        font-size: 12.5px;
+        font-weight: 600;
+        border: 2px solid;
+        transition:
+          background 150ms ease,
+          color 150ms ease,
+          border-color 150ms ease;
       }
       .strip {
         position: relative;
         border-radius: 16px;
         background: var(--ink);
         box-shadow: 3px 3px 0 var(--violet);
+      }
+      :host([desktop]) .strip {
+        border-radius: 0 0 16px 16px;
       }
       .screen {
         position: absolute;
@@ -56,6 +95,11 @@ export class ControllerGraphic extends LitElement {
         font-family: var(--mono);
         font-size: 9.5px;
         color: var(--ink);
+      }
+      :host([desktop]) .screen {
+        width: 118px;
+        height: 26px;
+        font-size: 10px;
       }
       .switch-wrap {
         position: absolute;
@@ -91,6 +135,7 @@ export class ControllerGraphic extends LitElement {
   ];
 
   @property({ attribute: false }) store!: StompStore;
+  @property({ type: Boolean, reflect: true }) desktop = false;
   private storeController!: StoreController;
 
   connectedCallback() {
@@ -102,13 +147,33 @@ export class ControllerGraphic extends LitElement {
     const st = this.store.state;
     const def = CONTROLLERS[st.controllerId];
     const bank = st.banks[st.bank];
+    const stripHeight = this.desktop ? def.heightDesktop : def.height;
 
     return html`
       <button class="name-row" @click=${() => this.store.openControllerPicker()}>
         <span class="name">${def.name}</span>
         <span class="change">change ⌄</span>
       </button>
-      <div class="strip" style="height:${def.height}px">
+      ${this.desktop
+        ? html`
+            <div class="bank-row">
+              <span class="bank-row-label">bank</span>
+              ${st.banks.map((_, i) => {
+                const on = i === st.bank;
+                return html`
+                  <button
+                    class="bank-chip"
+                    style="border-color:${on ? 'var(--mustard)' : 'rgba(247,241,227,.28)'};background:${on ? 'var(--mustard)' : 'transparent'};color:${on ? 'var(--ink)' : 'rgba(247,241,227,.6)'}"
+                    @click=${() => this.store.selectBank(i)}
+                  >
+                    0${i + 1}
+                  </button>
+                `;
+              })}
+            </div>
+          `
+        : null}
+      <div class="strip" style="height:${stripHeight}px">
         ${def.screen
           ? html`<div class="screen">bank ${st.bank + 1} · ${st.selectedKey}</div>`
           : null}

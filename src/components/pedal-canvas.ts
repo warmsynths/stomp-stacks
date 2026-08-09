@@ -26,6 +26,7 @@ export class PedalCanvas extends LitElement {
         flex: 1;
         min-height: 0;
         width: 100%;
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -37,11 +38,21 @@ export class PedalCanvas extends LitElement {
         align-items: flex-start;
         overflow-y: auto;
       }
+      :host([desktop]) .canvas {
+        padding: 0 26px 20px;
+      }
       .stage {
         position: relative;
         flex: none;
         container-type: size;
         filter: drop-shadow(5px 5px 0 var(--ink));
+      }
+      :host([desktop]) .stage {
+        filter: drop-shadow(6px 6px 0 var(--ink));
+      }
+      .deco {
+        position: absolute;
+        border: 2px solid var(--ink);
       }
       .enclosure {
         position: absolute;
@@ -92,6 +103,7 @@ export class PedalCanvas extends LitElement {
 
   @property({ attribute: false }) store!: StompStore;
   @property({ type: Boolean, reflect: true }) phone = false;
+  @property({ type: Boolean, reflect: true }) desktop = false;
 
   private storeController!: StoreController;
 
@@ -106,15 +118,26 @@ export class PedalCanvas extends LitElement {
     const drawn = st.face === 'drawn';
     const list = this.store.activeStack;
 
-    const stageStyle = {
+    const stageStyle: Record<string, string> = {
       aspectRatio: drawn ? '344/426' : `${device.pw}/${device.ph}`,
       width: this.phone ? '100%' : 'auto',
       maxWidth: '100%',
       height: this.phone ? 'auto' : '100%',
     };
+    if (this.desktop) {
+      stageStyle.maxHeight = drawn ? '420px' : '600px';
+    }
 
     return html`
       <div class="canvas">
+        ${this.desktop
+          ? html`
+              <span class="deco" style="left:8%;top:14%;width:13px;height:13px;border-radius:50%;background:var(--sky)"></span>
+              <span class="deco" style="left:13%;bottom:20%;width:20px;height:20px;border-radius:6px;background:var(--mustard);transform:rotate(14deg)"></span>
+              <span class="deco" style="right:10%;top:22%;width:18px;height:18px;border-radius:6px;background:var(--coral);transform:rotate(-12deg)"></span>
+              <span class="deco" style="right:7%;bottom:16%;width:12px;height:12px;border-radius:50%;background:var(--violet)"></span>
+            `
+          : null}
         <div class="stage" style=${styleMap(stageStyle)}>
           ${drawn
             ? html`
