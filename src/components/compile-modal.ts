@@ -4,7 +4,7 @@ import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/s
 import { CONTROLLERS } from '../data/controllers.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
-import { compileConfig, compileLines } from '../compiler/midi.js';
+import { compileConfig, compileHardwareScribbleConfig, compileLines } from '../compiler/midi.js';
 import { downloadJson } from '../compiler/download.js';
 
 /** "cook it up" result: a readable preview of the compiled MIDI messages, and
@@ -84,6 +84,7 @@ export class CompileModal extends LitElement {
       .foot {
         flex: none;
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
         padding: 14px 20px 20px;
         border-top: 2.5px solid var(--ink);
@@ -110,13 +111,13 @@ export class CompileModal extends LitElement {
         opacity: 1;
       }
       .btn-grab {
-        flex: 2;
+        flex: 1;
         padding: 12px;
         border-radius: 20px;
         background: var(--sky);
         border: 2.5px solid var(--ink);
         box-shadow: 2px 2px 0 var(--ink);
-        font-size: 14px;
+        font-size: 13.5px;
         font-weight: 600;
         transition:
           transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -128,7 +129,7 @@ export class CompileModal extends LitElement {
       }
       :host([desktop]) .btn-grab {
         flex: none;
-        padding: 10px 20px;
+        padding: 10px 18px;
         border-radius: 22px;
         box-shadow: 3px 3px 0 var(--ink);
       }
@@ -169,7 +170,10 @@ export class CompileModal extends LitElement {
           <div class="foot">
             <button class="btn-close" @click=${() => this.store.closeCompile()}>close</button>
             <button class="btn-grab" @click=${() => downloadJson('stomp-stacks-preset.config.json', compileConfig(st))}>
-              grab preset.json
+              preset.json
+            </button>
+            <button class="btn-grab" style="background: var(--accent, #FFD166)" @click=${() => downloadJson('Scribble_Hardware_Config.json', compileHardwareScribbleConfig(st))}>
+              full scribble hardware config.json
             </button>
           </div>
         </div>

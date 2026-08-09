@@ -12,6 +12,7 @@
 import { ACTIONS, CONTROLLERS, type ActionId } from '../data/controllers.js';
 import { DEVICES, MAX_VALUE, valueOptionsFor } from '../data/devices.js';
 import type { StompState, MacroStep } from '../state/types.js';
+import type { ScribbleConfig, ScribblePresetSetting } from '../types/scribble.js';
 
 const CC_STATUS_BASE = 0xb0; // Control Change, channel 1
 
@@ -95,6 +96,120 @@ export function compileConfig(state: StompState): CompiledConfig {
     generatedAt: new Date().toISOString(),
     controller: CONTROLLERS[state.controllerId].name,
     midiChannel: 'per-device',
+    presetSettings,
+  };
+}
+
+/**
+ * Compiles macro stacks into a full 100% hardware-compatible Pirate MIDI Scribble config JSON
+ * based on reverse-engineered physical device export structure.
+ */
+export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig {
+  const presetSettings: ScribblePresetSetting[] = [];
+
+  // Generate 128 standard presets
+  for (let i = 0; i < 128; i++) {
+    const isPopulated = i < state.banks.length;
+    let bankName = `Preset ${i + 1}`;
+    let secondaryText = `Second. ${i + 1}`;
+    const messages: Array<{ statusByte: number; dataByte1: number; dataByte2: number; outputs: { usbd: boolean; ble: boolean; midi1: boolean } }> = [];
+
+    if (isPopulated) {
+      const bank = state.banks[i];
+      let firstLabel = '';
+      Object.keys(bank).forEach((switchKey) => {
+        ACTIONS.forEach(({ id: action }) => {
+          const steps = bank[switchKey][action];
+          steps.forEach((step) => {
+            const d = describeStep(step);
+            if (!firstLabel) firstLabel = `${d.deviceName} ${d.label}`;
+            messages.push({
+              statusByte: d.message.statusByte,
+              dataByte1: d.message.dataByte1,
+              dataByte2: d.message.dataByte2,
+              outputs: { usbd: true, ble: true, midi1: true },
+            });
+          });
+        });
+      });
+      if (messages.length > 0) {
+        bankName = `BANK ${i + 1}`;
+        secondaryText = firstLabel || secondaryText;
+      }
+    }
+
+    presetSettings.push({
+      bankId: 0,
+      bankName,
+      secondaryText,
+      colourOverride: messages.length > 0,
+      colour: messages.length > 0 ? 582655 : 0, // Cyan for populated, 0 for default
+      textColourOverride: messages.length > 0,
+      textColour: messages.length > 0 ? 16777215 : 0, // White text for populated
+      midiValueDisplayOverride: false,
+      midiValueDisplay: messages.length > 0 ? 'valueOnly' : 'none',
+      midiValueDisplayCC: 0,
+      bpm: 120,
+      switches: [
+        { pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+        { pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+      ],
+      customMessages: { numMessages: 0, messages: [] },
+      presetMessages: {
+        numMessages: messages.length,
+        messages,
+      },
+    });
+  }
+
+  return {
+    deviceSettings: {
+      deviceModel: 'Scribble',
+      firmwareVersion: '1.0.1-beta.2',
+      hardwareVersion: '1.x.0',
+      deviceName: 'Scribble',
+      uId: 158812475426520,
+      profileId: 0,
+    },
+    globalSettings: {
+      deviceName: 'Scribble',
+      currentBank: 0,
+      lightMode: 'dark',
+      mainColour: 15199215,
+      textColour: 0,
+      displayBrightness: 100,
+      midiChannel: 1,
+      globalBpm: 120,
+      midiOutPortMode: 'midiOutA',
+      bankPcMidiOutputs: { usbd: 0, ble: 0, midi1: 0 },
+      clockMode: 'external',
+      clockDisplayType: 'bpm',
+      tapTempoQuant: 'none',
+      usbdThruHandles: { usbd: true, ble: true, midi1: true },
+      bleThruHandles: { usbd: true, ble: true, midi1: true },
+      midi1ThruHandles: { usbd: true, ble: true, midi1: true },
+      midiClockOutHandles: { usbd: true, ble: true, midi1: true },
+      switches: [
+        { mode: 'pressPresetDown', pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+        { mode: 'pressPresetUp', pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+      ],
+      customMessages: { numMessages: 0, messages: [] },
+      presetUpCC: 1,
+      presetDownCC: 2,
+      goToPresetCC: 3,
+      globalCustomMessagesCC: 17,
+      presetCustomMessagesCC: 16,
+      midiValueDisplay: 'valueOnly',
+      midiValueDisplayCC: 7,
+      wirelessType: 'ble',
+      bleMode: 'server',
+      mainTextResize: false,
+      zeroIndexBanks: false,
+      kemperPlayerMode: false,
+      useStaticIp: false,
+      staticIp: '0.0.0.0',
+      gatewayIp: '0.0.0.0',
+    },
     presetSettings,
   };
 }
