@@ -1,0 +1,160 @@
+// Device Dictionary — the translation layer between the visual UI and raw MIDI.
+// Each device owns a physical MIDI channel and a fixed CC number per control;
+// see src/compiler/midi.ts for how these turn into statusByte/dataByte1/dataByte2.
+
+export type ControlType = 'knob' | 'toggle' | 'foot';
+
+export interface ControlValueOption {
+  /** Human label shown in the value popover, e.g. "9 o'clock", "centre". */
+  label: string;
+  /** Raw MIDI CC value (0-127) sent for this option. */
+  value: number;
+}
+
+export interface DeviceControl {
+  id: string;
+  /** Short label shown on the faceplate hotspot. */
+  short: string;
+  /** Full label shown on hover / in the macro stack. */
+  label: string;
+  type: ControlType;
+  /** Fixed MIDI CC number (dataByte1) for this control, within its device's channel. */
+  cc: number;
+  /** Drawn-fallback position, percent of stage. */
+  x: number;
+  y: number;
+  /** Position over the real photo, percent of stage. */
+  px: number;
+  py: number;
+  /** Hotspot size over the real photo, percent of stage width. */
+  ps: number;
+  /**
+   * Discrete value options for multi-state controls (toggles).
+   * Knobs without an explicit list use the shared 5-position KNOB_VALUES.
+   * Foot switches are momentary and always send MAX_VALUE.
+   */
+  values?: ControlValueOption[];
+}
+
+export interface Device {
+  id: string;
+  name: string;
+  faceName: string;
+  sub: string;
+  accent: string;
+  body: string;
+  ink: string;
+  /** Physical MIDI channel (1-based) this pedal listens on. */
+  midiChannel: number;
+  photo: string;
+  pw: number;
+  ph: number;
+  controls: DeviceControl[];
+}
+
+export const MAX_VALUE = 127;
+
+/** Shared 5-position sweep used by every knob. */
+export const KNOB_VALUES: ControlValueOption[] = [
+  { label: 'min', value: 0 },
+  { label: "9 o'clock", value: 32 },
+  { label: 'noon', value: 64 },
+  { label: '3 o\'clock', value: 96 },
+  { label: 'max', value: 127 },
+];
+
+const TRI: ControlValueOption[] = [
+  { label: 'left', value: 0 },
+  { label: 'centre', value: 64 },
+  { label: 'right', value: 127 },
+];
+
+export const DEVICES: Record<string, Device> = {
+  blooper: {
+    id: 'blooper',
+    name: 'blooper',
+    faceName: 'blooper',
+    sub: 'bottomless looper',
+    accent: '#8fd0e6',
+    body: '#bfe2ec',
+    ink: '#173b47',
+    midiChannel: 3,
+    photo: 'assets/blooper-face.png',
+    pw: 508,
+    ph: 948,
+    controls: [
+      { id: 'volume', short: 'ramp volume', label: 'Ramp / Volume', type: 'knob', cc: 1, x: 22, y: 12, px: 18.7, py: 9.7, ps: 20.7 },
+      { id: 'layers', short: 'layers', label: 'Layers', type: 'knob', cc: 2, x: 50, y: 12, px: 49.2, py: 9.5, ps: 19.7 },
+      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 3, x: 78, y: 12, px: 82.0, py: 9.5, ps: 19.7 },
+      { id: 'modA', short: 'mod a', label: 'Modifier A', type: 'knob', cc: 4, x: 22, y: 33, px: 19.1, py: 29.7, ps: 20.7 },
+      { id: 'stability', short: 'stability', label: 'Stability', type: 'knob', cc: 5, x: 50, y: 33, px: 49.6, py: 29.5, ps: 19.7 },
+      { id: 'modB', short: 'mod b', label: 'Modifier B', type: 'knob', cc: 6, x: 78, y: 33, px: 82.0, py: 29.7, ps: 19.7 },
+      { id: 'chA', short: '1 2 3', label: 'Mod A channel', type: 'toggle', cc: 7, x: 22, y: 52, px: 19.7, py: 46.8, ps: 12.2, values: [{ label: '1', value: 0 }, { label: '2', value: 64 }, { label: '3', value: 127 }] },
+      { id: 'mode', short: 'norm add samp', label: 'Norm / Add / Samp', type: 'toggle', cc: 8, x: 50, y: 52, px: 49.8, py: 46.8, ps: 12.2, values: [{ label: 'normal', value: 0 }, { label: 'additive', value: 64 }, { label: 'sampling', value: 127 }] },
+      { id: 'chB', short: '4 5 6', label: 'Mod B channel', type: 'toggle', cc: 9, x: 78, y: 52, px: 80.7, py: 46.8, ps: 12.2, values: [{ label: '4', value: 0 }, { label: '5', value: 64 }, { label: '6', value: 127 }] },
+      { id: 'undo', short: 'undo / redo', label: 'Undo / Redo', type: 'toggle', cc: 10, x: 50, y: 82, px: 49.8, py: 85.7, ps: 9.1, values: [{ label: 'undo', value: 0 }, { label: 'off', value: 64 }, { label: 'redo', value: 127 }] },
+      { id: 'record', short: 'record', label: 'Record', type: 'foot', cc: 11, x: 28, y: 82, px: 19.1, py: 89.1, ps: 19.7 },
+      { id: 'loop', short: 'loop', label: 'Loop', type: 'foot', cc: 12, x: 72, y: 82, px: 79.8, py: 89.1, ps: 19.7 },
+    ],
+  },
+  mood: {
+    id: 'mood',
+    name: 'MOOD',
+    faceName: 'MOOD',
+    sub: 'instant ambience',
+    accent: '#ef7d5c',
+    body: '#e8785a',
+    ink: '#4a150c',
+    midiChannel: 2,
+    photo: 'assets/mood-face.png',
+    pw: 507,
+    ph: 957,
+    controls: [
+      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 1, x: 22, y: 12, px: 17.9, py: 10.1, ps: 20.7 },
+      { id: 'mix', short: 'mix (ramp)', label: 'Mix (Ramp)', type: 'knob', cc: 2, x: 50, y: 12, px: 48.9, py: 10.1, ps: 19.8 },
+      { id: 'length', short: 'length', label: 'Length', type: 'knob', cc: 3, x: 78, y: 12, px: 81.5, py: 10.1, ps: 19.8 },
+      { id: 'modWet', short: 'modify', label: 'Modify — wet', type: 'knob', cc: 4, x: 22, y: 33, px: 17.9, py: 30.5, ps: 20.7 },
+      { id: 'clock', short: 'clock', label: 'Clock', type: 'knob', cc: 5, x: 50, y: 33, px: 49.3, py: 30.3, ps: 19.8 },
+      { id: 'modMicro', short: 'modify', label: 'Modify — micro', type: 'knob', cc: 6, x: 78, y: 33, px: 81.8, py: 30.5, ps: 19.8 },
+      { id: 'wetmode', short: 'reverb delay slip', label: 'Wet effect', type: 'toggle', cc: 7, x: 22, y: 52, px: 19.3, py: 47.0, ps: 12.2, values: [{ label: 'reverb', value: 0 }, { label: 'delay', value: 64 }, { label: 'slip', value: 127 }] },
+      { id: 'routing', short: 'in · ○+in · ○', label: 'Routing', type: 'toggle', cc: 8, x: 50, y: 52, px: 49.5, py: 47.0, ps: 12.2, values: [{ label: 'in', value: 0 }, { label: 'loop + in', value: 64 }, { label: 'loop', value: 127 }] },
+      { id: 'micromode', short: 'stretch tape env', label: 'Micro-looper mode', type: 'toggle', cc: 9, x: 78, y: 52, px: 80.5, py: 47.0, ps: 12.2, values: [{ label: 'stretch', value: 0 }, { label: 'tape', value: 64 }, { label: 'env', value: 127 }] },
+      { id: 'bypass', short: 'bypass', label: 'Bypass mode', type: 'toggle', cc: 10, x: 50, y: 82, px: 49.5, py: 86.7, ps: 9.1, values: TRI },
+      { id: 'wet', short: 'wet', label: 'Wet channel', type: 'foot', cc: 11, x: 28, y: 82, px: 18.4, py: 90.3, ps: 19.8 },
+      { id: 'microloop', short: 'micro', label: 'Micro-looper', type: 'foot', cc: 12, x: 72, y: 82, px: 79.5, py: 90.3, ps: 19.8 },
+    ],
+  },
+  elcap: {
+    id: 'elcap',
+    name: 'el capistan',
+    faceName: 'el capistan',
+    sub: 'dTape echo',
+    accent: '#7b62b8',
+    body: '#c7ced2',
+    ink: '#20262b',
+    midiChannel: 1,
+    photo: 'assets/elcap-face.png',
+    pw: 775,
+    ph: 872,
+    controls: [
+      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 1, x: 22, y: 13, px: 14.9, py: 18.0, ps: 17.0 },
+      { id: 'cmix', short: 'mix', label: 'Mix', type: 'knob', cc: 2, x: 78, y: 13, px: 85.1, py: 18.0, ps: 17.0 },
+      { id: 'age', short: 'tape age', label: 'Tape Age', type: 'knob', cc: 3, x: 38, y: 33, px: 38.0, py: 37.3, ps: 17.0 },
+      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 4, x: 62, y: 33, px: 62.0, py: 37.3, ps: 17.0 },
+      { id: 'wow', short: 'wow & flutter', label: 'Wow & Flutter', type: 'knob', cc: 5, x: 22, y: 45, px: 14.9, py: 42.5, ps: 17.0 },
+      { id: 'spring', short: 'spring', label: 'Spring', type: 'knob', cc: 6, x: 78, y: 45, px: 85.1, py: 42.5, ps: 17.0 },
+      { id: 'head', short: 'tape head', label: 'Tape head', type: 'toggle', cc: 7, x: 40, y: 13, px: 42.8, py: 18.0, ps: 6.7, values: [{ label: 'fixed', value: 0 }, { label: 'multi', value: 64 }, { label: 'single', value: 127 }] },
+      { id: 'cmode', short: 'mode', label: 'Mode', type: 'toggle', cc: 8, x: 60, y: 13, px: 56.9, py: 18.0, ps: 6.7, values: [{ label: 'a', value: 0 }, { label: 'b', value: 64 }, { label: 'c', value: 127 }] },
+      { id: 'tap', short: 'tap', label: 'Tap', type: 'foot', cc: 9, x: 28, y: 82, px: 18.8, py: 80.1, ps: 14.2 },
+      { id: 'onoff', short: 'on', label: 'On / bypass', type: 'foot', cc: 10, x: 72, y: 82, px: 81.8, py: 80.1, ps: 14.2 },
+    ],
+  },
+};
+
+export const DEVICE_ORDER = ['blooper', 'mood', 'elcap'];
+
+export function valueOptionsFor(control: DeviceControl): ControlValueOption[] {
+  if (control.values) return control.values;
+  if (control.type === 'knob') return KNOB_VALUES;
+  return [];
+}
