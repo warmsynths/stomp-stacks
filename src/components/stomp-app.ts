@@ -15,6 +15,9 @@ import './controller-picker-modal.js';
 import './brain-picker-modal.js';
 import './add-pedal-modal.js';
 import './confirm-remove-modal.js';
+import './connect-modal.js';
+import './read-modal.js';
+import './wire-monitor.js';
 
 const PHONE_BREAKPOINT = 760;
 /** Below this, tablet/phone layout; at/above, desktop layout. */
@@ -169,6 +172,29 @@ export class StompApp extends LitElement {
         height: 38px;
         font-size: 15px;
       }
+      .connect-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 18px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 500;
+        transition: box-shadow 150ms ease;
+      }
+      .connect-btn:hover {
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .connect-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 1.5px solid var(--ink);
+        flex: none;
+      }
       .cook-btn {
         display: flex;
         align-items: center;
@@ -284,6 +310,9 @@ export class StompApp extends LitElement {
   render() {
     const total = this.store.totalAssigned;
 
+    const st = this.store.state;
+    const connCount = Object.keys(st.conn).filter((k) => st.conn[k]).length;
+
     return html`
       <div class="root">
         <header>
@@ -293,6 +322,10 @@ export class StompApp extends LitElement {
           </div>
           <div class="spacer"></div>
           ${this.renderHeaderRig()}
+          <button class="connect-btn" title="connect hardware" @click=${() => this.store.openConnect()}>
+            <span class="connect-dot" style="background:${connCount ? '#5bb85b' : 'rgba(22,50,61,.3)'}"></span>
+            <span>${connCount ? `${connCount} live` : 'connect'}</span>
+          </button>
           <button class="settings-btn" title="settings" @click=${() => this.store.openSettings()}>⚙</button>
           <button class="cook-btn" @click=${() => this.store.openCompile()}>
             <span>${this.desktop ? 'cook it up' : 'cook'}</span>
@@ -301,6 +334,7 @@ export class StompApp extends LitElement {
         </header>
 
         ${this.desktop ? this.renderDesktopBody() : this.renderCompactBody()}
+        <wire-monitor .store=${this.store}></wire-monitor>
       </div>
 
       <compile-modal .store=${this.store} ?phone=${this.phone}></compile-modal>
@@ -309,7 +343,10 @@ export class StompApp extends LitElement {
       <brain-picker-modal .store=${this.store}></brain-picker-modal>
       <add-pedal-modal .store=${this.store}></add-pedal-modal>
       <confirm-remove-modal .store=${this.store}></confirm-remove-modal>
+      <connect-modal .store=${this.store}></connect-modal>
+      <read-modal .store=${this.store}></read-modal>
     `;
+
   }
 
   private renderHeaderRig() {

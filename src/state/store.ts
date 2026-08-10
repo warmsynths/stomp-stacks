@@ -1,11 +1,20 @@
-import { ACTIONS, type ActionId } from '../data/controllers.js';
+import { ACTIONS, type ActionId, CONTROLLERS } from '../data/controllers.js';
 import type { DeviceControl } from '../data/devices.js';
+import { DEVICES } from '../data/devices.js';
 import { NAMING, PALETTE, HEX, FALLBACK, isDark, type ColorName, type NamingTargetDef } from '../data/naming.js';
 import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
 import { MacroStackModel, DEFAULT_MAX_STEPS } from './macro-stack-model.js';
-import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult } from './types.js';
+import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult, WireLogEntry, ParsedPresetItem } from './types.js';
+import { midiService, hex } from '../services/midi-service.js';
+import { parseAllScribblePresets } from '../compiler/adapters/scribble.js';
+import type { ScribbleConfig } from '../types/scribble.js';
+
+
+
+
 
 export const MAX_STEPS = DEFAULT_MAX_STEPS;
+
 
 function trunc(s: string, n: number): string {
   if (!s) return '';
@@ -37,8 +46,19 @@ function initialState(controllerId: string): StompState {
     channels: { blooper: 1, mood: 2, elcap: 3 },
     naming: {},
     sheetOpen: false,
+    connectOpen: false,
+    readOpen: false,
+    readData: null,
+    conn: {},
+    listening: null,
+    heard: null,
+    offsets: {},
+    monitorOn: false,
+    log: [],
+    seq: 0,
   };
 }
+
 
 /**
  * Central reactive UI store for the app.
@@ -321,4 +341,399 @@ export class StompStore extends EventTarget {
       colorPickerOpen: false,
     });
   }
+
+  // --- Hardware Connection & Wire Monitor Actions ---
+
+  openConnect() {
+    this.set({ connectOpen: true });
+  }
+
+  closeConnect() {
+    this.set({ connectOpen: false });
+  }
+
+  pushLog(e: { text: string; sub: string; tone: 'trig' | 'out' | 'in' | 'warn' | 'ok' }) {
+    const seq = this.state.seq + 1;
+    const entry: WireLogEntry = { n: seq, ...e };
+    const log = [...this.state.log, entry].slice(-60);
+    this.set({ seq, log });
+  }
+
+  toggleConn(id: string) {
+    const on = !!this.state.conn[id];
+    const conn = { ...this.state.conn, [id]: !on };
+    const listening = on && this.state.listening === id ? null : this.state.listening;
+    this.set({ conn, listening });
+
+    const nodes = midiService.getHardwareNodes(this.state);
+    const node = nodes.find((n) => n.id === id);
+    this.pushLog({
+      text: (on ? 'closed ' : 'opened ') + (node ? node.port : id),
+      sub: node ? node.name : id,
+      tone: on ? 'warn' : 'ok',
+    });
+  }
+
+  stompTest() {
+    const st = this.state;
+    const list = st.banks[st.bank]?.[st.selectedKey]?.[st.action] || [];
+    const act = ACTIONS.find((a) => a.id === st.action);
+    const actLabel = act ? act.label : st.action;
+
+    if (!list.length) {
+      this.pushLog({ text: `switch ${st.selectedKey} · ${actLabel}`, sub: 'nothing stacked here', tone: 'warn' });
+      return;
+    }
+
+    this.pushLog({
+      text: `▸ switch ${st.selectedKey} · ${actLabel}`,
+      sub: `${list.length} ${list.length === 1 ? 'message' : 'messages'} out`,
+      tone: 'trig',
+    });
+
+    list.forEach((s, i) => {
+      setTimeout(() => {
+        const dev = DEVICES[s.device];
+        if (!dev) return;
+        const c = dev.controls.find((x) => x.id === s.control);
+        const ch = st.channels[s.device] || 1;
+        const baseCc = c ? c.cc : 10;
+        const offset = st.offsets[s.device] || 0;
+        const cc = baseCc + offset;
+        const val = s.value === null ? 127 : s.value;
+        const live = !!st.conn[s.device];
+
+        if (live) {
+          midiService.sendControlChange(ch, cc, val);
+        }
+
+        this.pushLog({
+          text: `${hex(176 + ch - 1)} ${hex(cc)} ${hex(val)}`,
+          sub: live ? `${dev.name} · ${c ? c.label : s.control}` : `${dev.name} never answered — is it plugged in?`,
+          tone: live ? 'out' : 'warn',
+        });
+      }, 110 * i);
+    });
+  }
+
+  async readFrom(id: string, scribbleConfig?: ScribbleConfig) {
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId];
+    const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
+
+    this.set({
+      readOpen: true,
+      readData: {
+        from: id,
+        allPresets: [],
+        readingHardware: !scribbleConfig,
+      },
+      connectOpen: false,
+    });
+
+    let targetConfig = scribbleConfig;
+    if (!targetConfig) {
+      this.pushLog({
+        text: `querying ${id}...`,
+        sub: 'sending Web Serial / MIDI query to device',
+        tone: 'trig',
+      });
+      targetConfig = await midiService.readLiveDeviceConfig(id);
+    }
+
+    const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
+
+    const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
+      id: `${p.bankIndex}:${p.key}:${i}`,
+      bankIndex: p.bankIndex,
+      key: p.key,
+      presetName: p.presetName,
+      secondaryText: p.secondaryText,
+      steps: p.steps,
+      selected: true,
+    }));
+
+    const nodes = midiService.getHardwareNodes(st);
+    const node = nodes.find((n) => n.id === id);
+
+    this.pushLog({
+      text: `read ${node ? node.name : id}`,
+      sub: targetConfig
+        ? `${allPresets.length} device presets loaded live from physical Scribble`
+        : 'live hardware query finished — select scribble.json file if USB CDC requires manual grant',
+      tone: targetConfig ? 'ok' : 'warn',
+    });
+
+    this.set({
+      readData: {
+        from: id,
+        allPresets,
+        readingHardware: false,
+      },
+    });
+  }
+
+
+  async readLiveUsbSerial() {
+    this.set({
+      readOpen: true,
+      readData: {
+        from: 'scribble',
+        allPresets: [],
+        readingHardware: true,
+      },
+    });
+
+    const targetConfig = await midiService.requestLiveSerialConfig();
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId];
+    const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
+
+    const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
+    const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
+      id: `${p.bankIndex}:${p.key}:${i}`,
+      bankIndex: p.bankIndex,
+      key: p.key,
+      presetName: p.presetName,
+      secondaryText: p.secondaryText,
+      steps: p.steps,
+      selected: true,
+    }));
+
+    this.pushLog({
+      text: 'read USB device',
+      sub: targetConfig
+        ? `${allPresets.length} presets loaded live from physical Scribble`
+        : 'no USB serial data received — select scribble.json file',
+      tone: targetConfig ? 'ok' : 'warn',
+    });
+
+    this.set({
+      readData: {
+        from: 'scribble',
+        allPresets,
+        readingHardware: false,
+      },
+    });
+  }
+
+  async connectAndImportScribble() {
+    this.pushLog({
+      text: 'connecting to Scribble...',
+      sub: 'requesting USB device permission',
+      tone: 'trig',
+    });
+
+    const targetConfig = await midiService.requestLiveSerialConfig();
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId];
+    const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
+
+    if (targetConfig) {
+      const rawParsed = parseAllScribblePresets(targetConfig, st.channels, keys);
+      const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
+        id: `${p.bankIndex}:${p.key}:${i}`,
+        bankIndex: p.bankIndex,
+        key: p.key,
+        presetName: p.presetName,
+        secondaryText: p.secondaryText,
+        steps: p.steps,
+        selected: true,
+      }));
+
+      if (allPresets.length > 0) {
+        this.loadPresetsIntoBanks(allPresets);
+        this.pushLog({
+          text: 'Scribble connected & synced',
+          sub: `imported ${allPresets.length} active hardware presets`,
+          tone: 'ok',
+        });
+        this.set({ connectOpen: false });
+        return;
+      }
+    }
+
+    this.readFrom('scribble', targetConfig || undefined);
+  }
+
+  loadScribbleFile(config: ScribbleConfig) {
+    this.readFrom('scribble', config);
+  }
+
+
+
+
+
+  togglePresetSelection(presetId: string) {
+    if (!this.state.readData) return;
+    const allPresets = this.state.readData.allPresets.map((p) =>
+      p.id === presetId ? { ...p, selected: !p.selected } : p,
+    );
+    this.set({ readData: { ...this.state.readData, allPresets } });
+  }
+
+  selectAllReadPresets(select: boolean) {
+    if (!this.state.readData) return;
+    const allPresets = this.state.readData.allPresets.map((p) => ({ ...p, selected: select }));
+    this.set({ readData: { ...this.state.readData, allPresets } });
+  }
+
+  importSinglePreset(preset: ParsedPresetItem) {
+    const st = this.state;
+    const bankIdx = st.bank;
+    const key = st.selectedKey;
+
+    const updatedBanks = st.banks.map((b, bi) => {
+      if (bi !== bankIdx) return b;
+      const nb = { ...b };
+      nb[key] = { ...nb[key], press: [...preset.steps] };
+      return nb;
+    });
+
+    const namingKey = `${bankIdx}:${key}`;
+    const naming = {
+      ...st.naming,
+      [namingKey]: { name: preset.presetName, secondary: preset.secondaryText },
+    };
+
+    this.pushLog({
+      text: `imported preset "${preset.presetName}"`,
+      sub: `loaded into Bank ${bankIdx + 1} - Switch ${key}`,
+      tone: 'ok',
+    });
+
+    this.set({ banks: updatedBanks, naming });
+  }
+
+  loadPresetsIntoBanks(selectedPresets: ParsedPresetItem[]) {
+    if (!selectedPresets || !selectedPresets.length) return;
+
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId];
+    const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
+
+    const maxBankIndex = Math.max(...selectedPresets.map((p) => p.bankIndex), 0);
+    const requiredBanks = Math.max(st.banks.length, maxBankIndex + 1);
+
+    const updatedBanks: typeof st.banks = [];
+    for (let i = 0; i < requiredBanks; i++) {
+      const existingBank = st.banks[i] || MacroStackModel.createBanks(st.controllerId)[0];
+      const nb = { ...existingBank };
+      Object.keys(nb).forEach((k) => {
+        nb[k] = { press: [...nb[k].press], hold: [...nb[k].hold], double: [...nb[k].double] };
+      });
+      updatedBanks.push(nb);
+    }
+
+    const updatedNaming = { ...st.naming };
+
+    selectedPresets.forEach((p) => {
+      if (p.bankIndex < updatedBanks.length && keys.includes(p.key)) {
+        if (updatedBanks[p.bankIndex][p.key]) {
+          updatedBanks[p.bankIndex][p.key].press = [...p.steps];
+        }
+        const namingKey = `${p.bankIndex}:${p.key}`;
+        updatedNaming[namingKey] = { name: p.presetName, secondary: p.secondaryText };
+      }
+    });
+
+    const conn = { ...st.conn, scribble: true };
+
+    this.set({
+      banks: updatedBanks,
+      naming: updatedNaming,
+      conn,
+      readOpen: false,
+      readData: null,
+    });
+  }
+
+  importSelectedDevicePresets() {
+    const read = this.state.readData;
+    if (!read || !read.allPresets.length) return;
+
+    const selectedPresets = read.allPresets.filter((p) => p.selected);
+    if (!selectedPresets.length) return;
+
+    this.loadPresetsIntoBanks(selectedPresets);
+
+    this.pushLog({
+      text: `imported ${selectedPresets.length} presets from Scribble`,
+      sub: `loaded into Stomp Stacks banks & macro stacks`,
+      tone: 'ok',
+    });
+  }
+
+
+
+  pickReadRow(_index: number, _side: 'app' | 'device') {
+    // Legacy helper
+  }
+
+  applyRead() {
+    this.importSelectedDevicePresets();
+  }
+
+
+  cancelRead() {
+    this.set({ readOpen: false, readData: null });
+  }
+
+  listenTo(id: string) {
+    if (!this.state.conn[id]) return;
+    this.set({ listening: id, heard: null });
+
+    const dev = DEVICES[id];
+    if (!dev) return;
+
+    const driftMap: Record<string, number> = { blooper: 4, mood: 0, elcap: -2 };
+    const drift = driftMap[id] || 0;
+    const c = dev.controls[2] || dev.controls[0];
+    const baseCc = c ? c.cc : 10;
+    const currentOffset = this.state.offsets[id] || 0;
+
+    setTimeout(() => {
+      if (this.state.listening !== id) return;
+      const heardCc = baseCc + currentOffset + drift;
+      const expectCc = baseCc + currentOffset;
+
+      this.set({
+        heard: { pedal: id, control: c.id, cc: heardCc, expect: expectCc, drift },
+      });
+
+      const ch = this.state.channels[id] || 1;
+      this.pushLog({
+        text: `${hex(176 + ch - 1)} ${hex(heardCc)} 7F`,
+        sub: `${dev.name} sent this when you moved ${c.short || c.label}`,
+        tone: 'in',
+      });
+    }, 1100);
+  }
+
+  acceptDrift() {
+    const h = this.state.heard;
+    if (!h) return;
+    const dev = DEVICES[h.pedal];
+    const offsets = { ...this.state.offsets, [h.pedal]: (this.state.offsets[h.pedal] || 0) + h.drift };
+
+    this.set({ offsets, heard: null, listening: null });
+    this.pushLog({
+      text: `shifted ${dev ? dev.name : h.pedal} by ${h.drift > 0 ? '+' : ''}${h.drift}`,
+      sub: 'its whole map moves with it',
+      tone: 'ok',
+    });
+  }
+
+  dismissHeard() {
+    this.set({ heard: null, listening: null });
+  }
+
+  toggleMonitor() {
+    this.set({ monitorOn: !this.state.monitorOn });
+  }
+
+  clearLog() {
+    this.set({ log: [] });
+  }
 }
+

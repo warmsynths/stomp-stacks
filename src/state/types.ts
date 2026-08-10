@@ -33,6 +33,57 @@ export interface IdentResult {
   autoSec: string;
 }
 
+export interface HeardDrift {
+  pedal: string;
+  control: string;
+  cc: number;
+  expect: number;
+  drift: number;
+}
+
+export interface ReadRow {
+  key: string;
+  device: MacroStep[];
+  app: MacroStep[];
+  pick: 'app' | 'device';
+}
+
+export interface ParsedPresetItem {
+  id: string;
+  bankIndex: number;
+  key: string;
+  presetName: string;
+  secondaryText: string;
+  steps: MacroStep[];
+  selected: boolean;
+}
+
+export interface ReadModalData {
+  from: string;
+  allPresets: ParsedPresetItem[];
+  readingHardware?: boolean;
+}
+
+
+
+
+
+export interface WireLogEntry {
+  n: number;
+  text: string;
+  sub: string;
+  tone: 'trig' | 'out' | 'in' | 'warn' | 'ok';
+}
+
+export interface ConnectedNode {
+  id: string;
+  name: string;
+  kind: string;
+  port: string;
+  canRead: boolean;
+  canListen: boolean;
+}
+
 export interface StompState {
   controllerId: string;
   brainId: string;
@@ -59,4 +110,16 @@ export interface StompState {
   naming: Record<string, PresetNaming>;
   /** Phone-only bottom sheet expanded state. */
   sheetOpen: boolean;
+  /** Hardware connection modal & live wire monitor states */
+  connectOpen: boolean;
+  readOpen: boolean;
+  readData: ReadModalData | null;
+  conn: Record<string, boolean>;
+  listening: string | null;
+  heard: HeardDrift | null;
+  offsets: Record<string, number>;
+  monitorOn: boolean;
+  log: WireLogEntry[];
+  seq: number;
 }
+
