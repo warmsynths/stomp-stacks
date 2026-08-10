@@ -121,8 +121,52 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
     const state = createTestState();
     const compiled = compileHardwareScribbleConfig(state);
     expect(compiled.deviceSettings.deviceModel).toBe('Scribble');
-    expect(compiled.presetSettings.length).toBe(128);
-    expect(compiled.presetSettings[0].presetMessages.numMessages).toBe(3);
+    expect(compiled.bankSettings.length).toBe(128);
+    expect(compiled.bankSettings[0].presetMessages.numMessages).toBe(3);
+  });
+
+  // The device schema sets additionalProperties:false throughout, so a wrong or
+  // stray key rejects the whole object rather than being ignored on upload.
+  it('emits exactly the keys the published Scribble schema names', () => {
+    const state = createTestState();
+    const compiled = compileHardwareScribbleConfig(state);
+    const global = compiled.globalSettings as Record<string, unknown>;
+
+    expect(Object.keys(compiled).sort()).toEqual(['bankSettings', 'deviceSettings', 'globalSettings']);
+
+    // Renamed and removed keys that earlier builds got wrong.
+    expect(global).toHaveProperty('pcBankOutputs');
+    expect(global).not.toHaveProperty('bankPcMidiOutputs');
+    expect(global).not.toHaveProperty('tapTempoQuant');
+    expect(global).not.toHaveProperty('zeroIndexBanks');
+
+    // Message routing uses `usb`; the thru handles use `usbd`. Both spellings
+    // are correct, in their own place.
+    expect(Object.keys(compiled.bankSettings[0].presetMessages.messages[0].outputs).sort()).toEqual([
+      'ble',
+      'midi1',
+      'usb',
+    ]);
+    expect(Object.keys(global.usbdThruHandles as object).sort()).toEqual(['ble', 'midi1', 'usbd']);
+
+    // Ranges the device enforces.
+    expect(global.midiChannel).toBeGreaterThanOrEqual(0);
+    expect(global.midiChannel).toBeLessThanOrEqual(15);
+    expect(global.displayBrightness).toBeGreaterThanOrEqual(1);
+    expect(['preset', 'external', 'global', 'none']).toContain(global.clockMode);
+  });
+
+  it('clamps bank text and message stacks to the device limits', () => {
+    const state = createTestState();
+    const compiled = compileHardwareScribbleConfig(state);
+
+    compiled.bankSettings.forEach((bank) => {
+      expect(bank.bankName.length).toBeLessThanOrEqual(17);
+      expect(bank.secondaryText.length).toBeLessThanOrEqual(17);
+      expect(bank.presetMessages.messages.length).toBeLessThanOrEqual(8);
+      expect(bank.presetMessages.numMessages).toBe(bank.presetMessages.messages.length);
+      expect(bank.switches).toHaveLength(2);
+    });
   });
 
   it('detects channel collisions and issues correctly', () => {
@@ -152,7 +196,7 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
     const parsed = JSON.parse(result.exportFile.content);
     expect(parsed.deviceSettings).toBeDefined();
     expect(parsed.globalSettings).toBeDefined();
-    expect(parsed.presetSettings).toHaveLength(128);
+    expect(parsed.bankSettings).toHaveLength(128);
     expect(result.preview.length).toBeGreaterThan(0);
     expect(result.diagnostics.length).toBeGreaterThan(0);
 

@@ -1,6 +1,16 @@
 import { CONTROLLERS } from '../data/controllers.js';
 import { DEVICES } from '../data/devices.js';
 import type { ConnectedNode, StompState } from '../state/types.js';
+import type { ScribbleConfig } from '../types/scribble.js';
+import {
+  PirateMidiDeviceApi,
+  WebSerialTransport,
+  type ReadConfigOptions,
+  type WriteConfigOptions,
+} from './pirate-midi-device-api.js';
+
+/** Scribble enumerates as a USB CDC device at 115200 baud. */
+const SERIAL_BAUD_RATE = 115200;
 
 
 
@@ -90,236 +100,105 @@ export class WebMidiService {
 
 
   /**
-   * Reads live configuration directly from connected USB hardware via Web Serial CDC
-   * or Web MIDI SysEx dump request.
+   * Opens (or reuses) a Web Serial connection to the Scribble and returns a
+   * protocol client for it.
+   *
+   * `requestPort` may only be called from a user gesture, so `allowPrompt` is
+   * off for background reads and on for explicit "connect" clicks.
    */
-  /**
-   * Directly triggers Web Serial requestPort (must be invoked during a user click event)
-   * to connect and stream live configuration from Pirate MIDI Scribble over USB CDC.
-   */
-  async requestLiveSerialConfig(): Promise<any | null> {
-    if (typeof navigator !== 'undefined' && 'serial' in (navigator as any)) {
+  private async openDeviceApi(allowPrompt: boolean): Promise<PirateMidiDeviceApi | null> {
+    if (typeof navigator === 'undefined' || !('serial' in (navigator as any))) {
+      console.warn('Web Serial is unavailable — the Device API needs Chrome or Edge on desktop.');
+      return null;
+    }
+
+    const serial = (navigator as any).serial;
+
+    let port: any = null;
+    const paired = await serial.getPorts();
+    if (paired.length > 0) {
+      port = paired[0];
+    } else if (allowPrompt) {
+      port = await serial.requestPort();
+    }
+
+    if (!port) return null;
+
+    if (!port.readable || !port.writable) {
       try {
-        const serial = (navigator as any).serial;
-        let port: any = null;
-        const existingPorts = await serial.getPorts();
-
-        if (existingPorts.length > 0) {
-          port = existingPorts[0];
-        } else {
-          port = await serial.requestPort();
+        await port.open({ baudRate: SERIAL_BAUD_RATE });
+      } catch (err: any) {
+        // A port already open from an earlier read is fine; anything else is not.
+        if (err?.name !== 'InvalidStateError' && !String(err?.message || '').includes('already open')) {
+          throw err;
         }
-
-        if (port) {
-          if (!port.opened) {
-            try {
-              await port.open({ baudRate: 115200 });
-            } catch (openErr: any) {
-              if (openErr?.name !== 'InvalidStateError' && !openErr?.message?.includes('already open')) {
-                console.warn('Serial open warning:', openErr);
-              }
-            }
-          }
-
-          await new Promise((r) => setTimeout(r, 150));
-
-          try {
-            const writer = port.writable.getWriter();
-            const cmds = [
-              JSON.stringify({ cmd: 'export' }) + '\r\n',
-              JSON.stringify({ command: 'export' }) + '\r\n',
-              'EXPO\r\n',
-              'export\r\n',
-            ];
-            for (const cmd of cmds) {
-              await writer.write(new TextEncoder().encode(cmd));
-              await new Promise((r) => setTimeout(r, 60));
-            }
-            writer.releaseLock();
-          } catch (wErr) {
-            console.warn('Serial writer send:', wErr);
-          }
-
-          const reader = port.readable.getReader();
-          let jsonBuffer = '';
-          const startTime = Date.now();
-
-          try {
-            while (Date.now() - startTime < 3500) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              jsonBuffer += new TextDecoder().decode(value, { stream: true });
-              if (jsonBuffer.includes('}') && jsonBuffer.includes('{')) {
-                const start = jsonBuffer.indexOf('{');
-                const end = jsonBuffer.lastIndexOf('}');
-                if (start >= 0 && end > start) {
-                  const candidate = jsonBuffer.slice(start, end + 1);
-                  try {
-                    const parsed = JSON.parse(candidate);
-                    try {
-                      reader.releaseLock();
-                    } catch (e) {}
-                    return parsed;
-                  } catch (e) {
-                    // Keep accumulating
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // Stream end or cancelled
-          } finally {
-            try {
-              reader.releaseLock();
-            } catch (e) {}
-          }
-        }
-      } catch (err) {
-        console.warn('Web Serial live read error:', err);
       }
     }
 
-    // Fallback to SysEx query if Web Serial didn't return JSON
-    return this.readLiveDeviceConfig('scribble');
+    return new PirateMidiDeviceApi(new WebSerialTransport(port));
   }
-
-
-
 
   /**
-   * Reads live configuration directly from connected Pirate MIDI Scribble hardware via Web Serial CDC
-   * or Web MIDI SysEx dump request.
+   * Reads the full device configuration over USB CDC using the Pirate MIDI
+   * Device API. Must be called from a user gesture the first time, because
+   * pairing the serial port requires one.
    */
-  async readLiveDeviceConfig(id: string): Promise<any | null> {
-    // 1. Try Web Serial API first using already paired ports
-    if (typeof navigator !== 'undefined' && 'serial' in (navigator as any)) {
-      try {
-        const serial = (navigator as any).serial;
-        const existingPorts = await serial.getPorts();
-
-        if (existingPorts.length > 0) {
-          const port = existingPorts[0];
-          if (!port.opened) {
-            try {
-              await port.open({ baudRate: 115200 });
-            } catch (openErr: any) {
-              if (openErr?.name !== 'InvalidStateError' && !openErr?.message?.includes('already open')) {
-                console.warn('Serial open warning:', openErr);
-              }
-            }
-          }
-
-          try {
-            const writer = port.writable.getWriter();
-            const exportCmd1 = JSON.stringify({ cmd: 'export' }) + '\r\n';
-            const exportCmd2 = 'EXPO\r\n';
-            await writer.write(new TextEncoder().encode(exportCmd1));
-            await writer.write(new TextEncoder().encode(exportCmd2));
-            writer.releaseLock();
-          } catch (wErr) {
-            console.warn('Serial writer send warning:', wErr);
-          }
-
-          const reader = port.readable.getReader();
-          let jsonBuffer = '';
-          const timeout = setTimeout(() => {
-            try { reader.cancel(); } catch (e) {}
-          }, 3000);
-
-          try {
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              jsonBuffer += new TextDecoder().decode(value);
-              if (jsonBuffer.includes('}') && jsonBuffer.includes('{')) {
-                const start = jsonBuffer.indexOf('{');
-                const end = jsonBuffer.lastIndexOf('}');
-                if (start >= 0 && end > start) {
-                  const candidate = jsonBuffer.slice(start, end + 1);
-                  try {
-                    const parsed = JSON.parse(candidate);
-                    clearTimeout(timeout);
-                    try { reader.releaseLock(); } catch (e) {}
-                    return parsed;
-                  } catch (e) {}
-                }
-              }
-            }
-          } catch (e) {
-          } finally {
-            clearTimeout(timeout);
-            try { reader.releaseLock(); } catch (e) {}
-          }
-        }
-
-      } catch (err) {
-        console.warn('Web Serial paired read:', err);
-      }
+  async requestLiveSerialConfig(options: ReadConfigOptions = {}): Promise<ScribbleConfig | null> {
+    let api: PirateMidiDeviceApi | null = null;
+    try {
+      api = await this.openDeviceApi(true);
+      if (!api) return null;
+      return await api.readFullConfig(options);
+    } catch (err) {
+      console.warn('Scribble read failed:', err);
+      return null;
+    } finally {
+      await api?.close();
     }
-
-
-    // 2. Try Web MIDI SysEx dump request (Pirate MIDI Manufacturer ID: 00 02 4F)
-    if (this.midiAccess) {
-      return new Promise((resolve) => {
-        let resolved = false;
-        const outputs: MIDIOutput[] = [];
-        const inputs: MIDIInput[] = [];
-
-        this.midiAccess!.outputs.forEach((o) => outputs.push(o));
-        this.midiAccess!.inputs.forEach((i) => inputs.push(i));
-
-        const targetOut = outputs.find((o) => o.name?.toLowerCase().includes(id.toLowerCase()) || o.name?.toLowerCase().includes('pirate'));
-        const targetIn = inputs.find((i) => i.name?.toLowerCase().includes(id.toLowerCase()) || i.name?.toLowerCase().includes('pirate'));
-
-        if (targetOut && targetIn) {
-          const onMidiMessage = (event: MIDIMessageEvent) => {
-            const data = event.data;
-            if (data && data[0] === 0xf0) {
-              targetIn.removeEventListener('midimessage', onMidiMessage as any);
-              resolved = true;
-
-              const textBytes = Array.from(data.slice(1, data.length - 1));
-              const text = String.fromCharCode(...textBytes);
-              try {
-                const start = text.indexOf('{');
-                const end = text.lastIndexOf('}');
-                if (start >= 0 && end > start) {
-                  const parsed = JSON.parse(text.slice(start, end + 1));
-                  resolve(parsed);
-                  return;
-                }
-              } catch (e) {}
-              resolve(null);
-            }
-          };
-
-          targetIn.addEventListener('midimessage', onMidiMessage as any);
-
-          try {
-            targetOut.send([0xf0, 0x00, 0x02, 0x4f, 0x04, 0x01, 0xf7]);
-            targetOut.send([0xf0, 0x00, 0x02, 0x4f, 0x00, 0x01, 0xf7]);
-          } catch (e) {
-            targetIn.removeEventListener('midimessage', onMidiMessage as any);
-          }
-
-          setTimeout(() => {
-            if (!resolved) {
-              targetIn.removeEventListener('midimessage', onMidiMessage as any);
-              resolve(null);
-            }
-          }, 3000);
-          return;
-        }
-
-        resolve(null);
-      });
-    }
-
-
-    return null;
   }
 
+  /**
+   * Reads the full device configuration from an already-paired serial port,
+   * without prompting. Returns null when nothing is paired yet.
+   *
+   * Only the Scribble speaks the Device API; other node ids have no transport.
+   */
+  async readLiveDeviceConfig(id: string, options: ReadConfigOptions = {}): Promise<ScribbleConfig | null> {
+    if (id !== 'scribble') return null;
 
+    let api: PirateMidiDeviceApi | null = null;
+    try {
+      api = await this.openDeviceApi(false);
+      if (!api) return null;
+      return await api.readFullConfig(options);
+    } catch (err) {
+      console.warn('Scribble read failed:', err);
+      return null;
+    } finally {
+      await api?.close();
+    }
+  }
+
+  /**
+   * Writes a configuration to the device and commits it to flash.
+   *
+   * The Scribble holds transferred banks in RAM until `savePresets` runs, so
+   * skipping the commit loses everything at power-off.
+   */
+  async writeLiveDeviceConfig(config: ScribbleConfig, options: WriteConfigOptions = {}): Promise<boolean> {
+    let api: PirateMidiDeviceApi | null = null;
+    try {
+      api = await this.openDeviceApi(true);
+      if (!api) return false;
+      await api.writeFullConfig(config, options);
+      return true;
+    } catch (err) {
+      console.warn('Scribble write failed:', err);
+      return false;
+    } finally {
+      await api?.close();
+    }
+  }
 
   /**
    * Transmits MIDI Control Change message out through Web MIDI if available.

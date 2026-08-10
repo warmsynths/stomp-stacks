@@ -438,7 +438,7 @@ export class StompStore extends EventTarget {
         sub: 'sending Web Serial / MIDI query to device',
         tone: 'trig',
       });
-      targetConfig = await midiService.readLiveDeviceConfig(id);
+      targetConfig = (await midiService.readLiveDeviceConfig(id)) ?? undefined;
     }
 
     const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];

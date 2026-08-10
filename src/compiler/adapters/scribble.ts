@@ -1,7 +1,15 @@
 import type { StompState, MacroStep } from '../../state/types.js';
 import { ACTIONS, type ActionId } from '../../data/controllers.js';
 import { HardwareRegistry } from '../../data/registry.js';
-import { type ScribbleConfig, type ScribblePresetSetting } from '../../types/scribble.js';
+import {
+  type ScribbleConfig,
+  type ScribbleBankSetting,
+  type ScribbleMessage,
+  type MessageOutputs,
+  BANK_COUNT,
+  MAX_BANK_TEXT_LENGTH,
+  MAX_MESSAGES_PER_STACK,
+} from '../../types/scribble.js';
 import { describeStep } from './mc3.js';
 import type { TargetAdapter, TargetExportFile, CompileLine } from './types.js';
 
@@ -73,15 +81,18 @@ export function compileConfig(state: StompState) {
   };
 }
 
-export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig {
-  const presetSettings: ScribblePresetSetting[] = [];
+/** Every message we emit fans out to all three ports. */
+const ALL_OUTPUTS: MessageOutputs = { usb: true, ble: true, midi1: true };
 
-  for (let i = 0; i < 128; i++) {
+export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig {
+  const bankSettings: ScribbleBankSetting[] = [];
+
+  for (let i = 0; i < BANK_COUNT; i++) {
     const isPopulated = i < state.banks.length;
     let bankName = `Preset ${i + 1}`;
     let secondaryText = `Second. ${i + 1}`;
     let presetColour = 0;
-    const messages: Array<{ statusByte: number; dataByte1: number; dataByte2: number; outputs: { usbd: boolean; ble: boolean; midi1: boolean } }> = [];
+    const messages: ScribbleMessage[] = [];
 
     if (isPopulated) {
       const bank = state.banks[i];
@@ -102,7 +113,7 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
               statusByte: d.message.statusByte,
               dataByte1: d.message.dataByte1,
               dataByte2: d.message.dataByte2,
-              outputs: { usbd: true, ble: true, midi1: true },
+              outputs: { ...ALL_OUTPUTS },
             });
           });
         });
@@ -115,10 +126,14 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       }
     }
 
-    presetSettings.push({
+    // The device caps every stack at 8 messages and every display string at 17
+    // characters; anything longer is rejected rather than truncated on arrival.
+    const presetMessages = messages.slice(0, MAX_MESSAGES_PER_STACK);
+
+    bankSettings.push({
       bankId: i,
-      bankName,
-      secondaryText,
+      bankName: bankName.slice(0, MAX_BANK_TEXT_LENGTH),
+      secondaryText: secondaryText.slice(0, MAX_BANK_TEXT_LENGTH),
       colourOverride: messages.length > 0,
       colour: messages.length > 0 ? (presetColour || 582655) : 0,
       textColourOverride: messages.length > 0,
@@ -133,8 +148,8 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       ],
       customMessages: { numMessages: 0, messages: [] },
       presetMessages: {
-        numMessages: messages.length,
-        messages,
+        numMessages: presetMessages.length,
+        messages: presetMessages,
       },
     });
   }
@@ -142,7 +157,7 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
   return {
     deviceSettings: {
       deviceModel: 'Scribble',
-      firmwareVersion: '1.0.1-beta.2',
+      firmwareVersion: '1.0.1',
       hardwareVersion: '1.x.0',
       deviceName: 'Scribble',
       uId: 158812475426520,
@@ -155,13 +170,12 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       mainColour: 15199215,
       textColour: 0,
       displayBrightness: 100,
-      midiChannel: 1,
+      midiChannel: 0, // Device API channels are zero-based (0-15)
       globalBpm: 120,
       midiOutPortMode: 'midiOutA',
-      bankPcMidiOutputs: { usbd: 0, ble: 0, midi1: 0 },
+      pcBankOutputs: { usbd: 1, ble: 1, midi1: 1 },
       clockMode: 'external',
       clockDisplayType: 'bpm',
-      tapTempoQuant: 'none',
       usbdThruHandles: { usbd: true, ble: true, midi1: true },
       bleThruHandles: { usbd: true, ble: true, midi1: true },
       midi1ThruHandles: { usbd: true, ble: true, midi1: true },
@@ -181,13 +195,12 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       wirelessType: 'ble',
       bleMode: 'server',
       mainTextResize: false,
-      zeroIndexBanks: false,
       kemperPlayerMode: false,
       useStaticIp: false,
       staticIp: '0.0.0.0',
       gatewayIp: '0.0.0.0',
     },
-    presetSettings,
+    bankSettings,
   };
 }
 
@@ -292,6 +305,9 @@ export function parseAllScribblePresets(
         cc = msg[1] || 0;
         val = msg[2] ?? 127;
       } else if (msg && typeof msg === 'object') {
+        // Smart messages (blockingDelay, sendCurrentPreset) are device control
+        // ops, not MIDI — they map to no pedal control.
+        if (typeof msg.smartType === 'string') return;
         statusByte = msg.statusByte || 0;
         cc = msg.dataByte1 || 0;
         val = msg.dataByte2 ?? 127;
@@ -349,7 +365,13 @@ export function parseAllScribblePresets(
     return presets;
   }
 
-  const rawPresets = Array.isArray(config?.presetSettings) ? config.presetSettings : [];
+  // `bankSettings` is the Device API term; `presetSettings` appears in configs
+  // this app exported before the schema was corrected, so both are accepted.
+  const rawPresets: any[] = Array.isArray(config?.bankSettings)
+    ? config.bankSettings
+    : Array.isArray(config?.presetSettings)
+      ? config.presetSettings
+      : [];
   if (rawPresets.length > 0) {
     rawPresets.forEach((preset: any, idx: number) => {
       const bankIndex = typeof preset.bankId === 'number' ? Math.floor(preset.bankId / 4) : Math.floor(idx / 4);

@@ -74,7 +74,7 @@ describe('StompStore Hardware Connection & Read Config', () => {
     const mockScribbleConfig: any = {
       deviceSettings: { deviceModel: 'Scribble', firmwareVersion: '1.0.1', hardwareVersion: '1.x.0', deviceName: 'Scribble', uId: 1, profileId: 0 },
       globalSettings: { deviceName: 'Scribble', currentBank: 0, lightMode: 'dark', mainColour: 0, textColour: 0, displayBrightness: 100, midiChannel: 1, globalBpm: 120, switches: [], customMessages: { numMessages: 0, messages: [] } },
-      presetSettings: [
+      bankSettings: [
         {
           bankId: 0,
           bankName: 'CUSTOM BLOOPER',
@@ -88,7 +88,7 @@ describe('StompStore Hardware Connection & Read Config', () => {
           customMessages: { numMessages: 0, messages: [] },
           presetMessages: {
             numMessages: 1,
-            messages: [{ statusByte: 0xb0, dataByte1: 21, dataByte2: 64, outputs: { usbd: true, ble: true, midi1: true } }],
+            messages: [{ statusByte: 0xb0, dataByte1: 21, dataByte2: 64, outputs: { usb: true, ble: true, midi1: true } }],
           },
 
         },
