@@ -16,6 +16,8 @@ export interface ControllerDef {
   banks: number;
   screen: boolean;
   onboard: boolean;
+  /** Hardware documentation and capability details. */
+  notes?: string[];
 }
 
 export const CONTROLLERS: Record<string, ControllerDef> = {
@@ -32,6 +34,11 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     banks: 4,
     screen: false,
     onboard: false,
+    notes: [
+      'Hardware Layout: 4 foot switches (A, B, C, D) across 4 banks.',
+      'No Onboard Macro Storage: Sends 1 MIDI message per switch. Requires an external smart relay hub (Pirate MIDI Scribble) to fan out multi-step macro stacks.',
+      'Editor & Connection: Configured via M-Vave CubeSuite app over Bluetooth or USB-C MIDI.',
+    ],
   },
   mc3: {
     id: 'mc3',
@@ -46,6 +53,12 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     banks: 3,
     screen: true,
     onboard: true,
+    notes: [
+      'Hardware Layout: 3 foot switches (A, B, C) supporting 30 physical banks.',
+      'Onboard Macro Storage: Stores up to 16 MIDI messages per switch action directly in memory without requiring an external relay box.',
+      'Editor Integration: Exports native preset JSON for import via the Morningstar Editor.',
+      'Connectivity: Features OLED display screen, 1x 5-pin DIN MIDI Out, 4x 3.5mm TRS MIDI outputs, and USB-C MIDI.',
+    ],
   },
 };
 

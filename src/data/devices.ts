@@ -20,6 +20,8 @@ export interface DeviceControl {
   type: ControlType;
   /** Fixed MIDI CC number (dataByte1) for this control, within its device's channel. */
   cc: number;
+  /** Optional hardware notes or parameter behavior details. */
+  notes?: string;
   /** Drawn-fallback position, percent of stage. */
   x: number;
   y: number;
@@ -46,9 +48,13 @@ export interface Device {
   ink: string;
   /** Physical MIDI channel (1-based) this pedal listens on. */
   midiChannel: number;
+  /** Program change offset (e.g. 0 for zero-based pedals like Blooper). */
+  pcOffset?: number;
   photo: string;
   pw: number;
   ph: number;
+  /** Detailed hardware MIDI specification notes & documentation. */
+  notes?: string[];
   controls: DeviceControl[];
 }
 
@@ -59,7 +65,7 @@ export const KNOB_VALUES: ControlValueOption[] = [
   { label: 'min', value: 0 },
   { label: "9 o'clock", value: 32 },
   { label: 'noon', value: 64 },
-  { label: '3 o\'clock', value: 96 },
+  { label: "3 o'clock", value: 96 },
   { label: 'max', value: 127 },
 ];
 
@@ -79,22 +85,29 @@ export const DEVICES: Record<string, Device> = {
     body: '#bfe2ec',
     ink: '#173b47',
     midiChannel: 3,
+    pcOffset: 0,
     photo: 'assets/blooper-face.png',
     pw: 508,
     ph: 948,
+    notes: [
+      'Zero-Based Program Changes: Blooper is a zero-based MIDI pedal. Loops 1-16 are saved and recalled using Program Changes 0-15. This allows for the use of Faves for recalling loops and puts presets in line with BOSS ES and MS series controllers. Other controllers have an option for "PC Offset" set to 0.',
+      'TRS MIDI Connection: Blooper uses a 1/4" TRS Ring Active connection. Requires a Chase Bliss MIDIBox or compatible TRS adapter for 5-pin MIDI controllers.',
+      'Default Channel: Listens on MIDI Channel 2 by default (configurable by holding both stomp switches at power-on and sending a Program Change).',
+      'Additive Mode Overdubs: In Additive mode, MIDI CC movements for Modifiers or Stability can be recorded directly into loop overdubs.',
+    ],
     controls: [
-      { id: 'volume', short: 'ramp volume', label: 'Ramp / Volume', type: 'knob', cc: 1, x: 22, y: 12, px: 18.7, py: 9.7, ps: 20.7 },
-      { id: 'layers', short: 'layers', label: 'Layers', type: 'knob', cc: 2, x: 50, y: 12, px: 49.2, py: 9.5, ps: 19.7 },
-      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 3, x: 78, y: 12, px: 82.0, py: 9.5, ps: 19.7 },
-      { id: 'modA', short: 'mod a', label: 'Modifier A', type: 'knob', cc: 4, x: 22, y: 33, px: 19.1, py: 29.7, ps: 20.7 },
-      { id: 'stability', short: 'stability', label: 'Stability', type: 'knob', cc: 5, x: 50, y: 33, px: 49.6, py: 29.5, ps: 19.7 },
-      { id: 'modB', short: 'mod b', label: 'Modifier B', type: 'knob', cc: 6, x: 78, y: 33, px: 82.0, py: 29.7, ps: 19.7 },
-      { id: 'chA', short: '1 2 3', label: 'Mod A channel', type: 'toggle', cc: 7, x: 22, y: 52, px: 19.7, py: 46.8, ps: 12.2, values: [{ label: '1', value: 0 }, { label: '2', value: 64 }, { label: '3', value: 127 }] },
-      { id: 'mode', short: 'norm add samp', label: 'Norm / Add / Samp', type: 'toggle', cc: 8, x: 50, y: 52, px: 49.8, py: 46.8, ps: 12.2, values: [{ label: 'normal', value: 0 }, { label: 'additive', value: 64 }, { label: 'sampling', value: 127 }] },
-      { id: 'chB', short: '4 5 6', label: 'Mod B channel', type: 'toggle', cc: 9, x: 78, y: 52, px: 80.7, py: 46.8, ps: 12.2, values: [{ label: '4', value: 0 }, { label: '5', value: 64 }, { label: '6', value: 127 }] },
-      { id: 'undo', short: 'undo / redo', label: 'Undo / Redo', type: 'toggle', cc: 10, x: 50, y: 82, px: 49.8, py: 85.7, ps: 9.1, values: [{ label: 'undo', value: 0 }, { label: 'off', value: 64 }, { label: 'redo', value: 127 }] },
-      { id: 'record', short: 'record', label: 'Record', type: 'foot', cc: 11, x: 28, y: 82, px: 19.1, py: 89.1, ps: 19.7 },
-      { id: 'loop', short: 'loop', label: 'Loop', type: 'foot', cc: 12, x: 72, y: 82, px: 79.8, py: 89.1, ps: 19.7 },
+      { id: 'volume', short: 'ramp volume', label: 'Ramp / Volume', type: 'knob', cc: 14, x: 22, y: 12, px: 18.7, py: 9.7, ps: 20.7 },
+      { id: 'layers', short: 'layers', label: 'Layers', type: 'knob', cc: 17, notes: 'Navigates loop layer undo/redo history (0-127)', x: 50, y: 12, px: 49.2, py: 9.5, ps: 19.7 },
+      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 15, x: 78, y: 12, px: 82.0, py: 9.5, ps: 19.7 },
+      { id: 'modA', short: 'mod a', label: 'Modifier A', type: 'knob', cc: 30, x: 22, y: 33, px: 19.1, py: 29.7, ps: 20.7 },
+      { id: 'stability', short: 'stability', label: 'Stability', type: 'knob', cc: 18, x: 50, y: 33, px: 49.6, py: 29.5, ps: 19.7 },
+      { id: 'modB', short: 'mod b', label: 'Modifier B', type: 'knob', cc: 31, x: 78, y: 33, px: 82.0, py: 29.7, ps: 19.7 },
+      { id: 'chA', short: '1 2 3', label: 'Mod A channel', type: 'toggle', cc: 21, x: 22, y: 52, px: 19.7, py: 46.8, ps: 12.2, values: [{ label: '1', value: 0 }, { label: '2', value: 64 }, { label: '3', value: 127 }] },
+      { id: 'mode', short: 'norm add samp', label: 'Norm / Add / Samp', type: 'toggle', cc: 22, x: 50, y: 52, px: 49.8, py: 46.8, ps: 12.2, values: [{ label: 'normal', value: 0 }, { label: 'additive', value: 64 }, { label: 'sampling', value: 127 }] },
+      { id: 'chB', short: '4 5 6', label: 'Mod B channel', type: 'toggle', cc: 23, x: 78, y: 52, px: 80.7, py: 46.8, ps: 12.2, values: [{ label: '4', value: 0 }, { label: '5', value: 64 }, { label: '6', value: 127 }] },
+      { id: 'undo', short: 'undo / redo', label: 'Undo / Redo', type: 'toggle', cc: 5, notes: 'CC 5 triggers Undo, CC 6 triggers Redo', x: 50, y: 82, px: 49.8, py: 85.7, ps: 9.1, values: [{ label: 'undo', value: 0 }, { label: 'off', value: 64 }, { label: 'redo', value: 127 }] },
+      { id: 'record', short: 'record', label: 'Record', type: 'foot', cc: 1, notes: 'CC 1 triggers Record', x: 28, y: 82, px: 19.1, py: 89.1, ps: 19.7 },
+      { id: 'loop', short: 'loop', label: 'Loop', type: 'foot', cc: 2, notes: 'CC 2 triggers Play/Loop, CC 4 triggers Stop', x: 72, y: 82, px: 79.8, py: 89.1, ps: 19.7 },
     ],
   },
   mood: {
@@ -109,19 +122,25 @@ export const DEVICES: Record<string, Device> = {
     photo: 'assets/mood-face.png',
     pw: 507,
     ph: 957,
+    notes: [
+      'Independent Channel Bypass: CC 102 controls Micro-looper bypass (0=Off, 127=On) and CC 103 controls Wet channel bypass (0=Off, 127=On). On classic MOOD, CC 103 values 0 (both off), 45 (micro only), 85 (wet only), 127 (both on) set combined states.',
+      'TRS MIDI Connection: Uses 1/4" TRS Ring Active MIDI jack (requires Chase Bliss MIDIBox or TRS MIDI cable).',
+      'Default Channel: Set to MIDI Channel 2 by default.',
+      'Clock Sync & Subdivisions: CC 18 controls master clock speed. In Tape mode, Length (CC 16) quantizes loop subdivisions (x/32, x/16, x/8, x/4, x/2, x/1).',
+    ],
     controls: [
-      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 1, x: 22, y: 12, px: 17.9, py: 10.1, ps: 20.7 },
-      { id: 'mix', short: 'mix (ramp)', label: 'Mix (Ramp)', type: 'knob', cc: 2, x: 50, y: 12, px: 48.9, py: 10.1, ps: 19.8 },
-      { id: 'length', short: 'length', label: 'Length', type: 'knob', cc: 3, x: 78, y: 12, px: 81.5, py: 10.1, ps: 19.8 },
-      { id: 'modWet', short: 'modify', label: 'Modify — wet', type: 'knob', cc: 4, x: 22, y: 33, px: 17.9, py: 30.5, ps: 20.7 },
-      { id: 'clock', short: 'clock', label: 'Clock', type: 'knob', cc: 5, x: 50, y: 33, px: 49.3, py: 30.3, ps: 19.8 },
-      { id: 'modMicro', short: 'modify', label: 'Modify — micro', type: 'knob', cc: 6, x: 78, y: 33, px: 81.8, py: 30.5, ps: 19.8 },
-      { id: 'wetmode', short: 'reverb delay slip', label: 'Wet effect', type: 'toggle', cc: 7, x: 22, y: 52, px: 19.3, py: 47.0, ps: 12.2, values: [{ label: 'reverb', value: 0 }, { label: 'delay', value: 64 }, { label: 'slip', value: 127 }] },
-      { id: 'routing', short: 'in · ○+in · ○', label: 'Routing', type: 'toggle', cc: 8, x: 50, y: 52, px: 49.5, py: 47.0, ps: 12.2, values: [{ label: 'in', value: 0 }, { label: 'loop + in', value: 64 }, { label: 'loop', value: 127 }] },
-      { id: 'micromode', short: 'stretch tape env', label: 'Micro-looper mode', type: 'toggle', cc: 9, x: 78, y: 52, px: 80.5, py: 47.0, ps: 12.2, values: [{ label: 'stretch', value: 0 }, { label: 'tape', value: 64 }, { label: 'env', value: 127 }] },
-      { id: 'bypass', short: 'bypass', label: 'Bypass mode', type: 'toggle', cc: 10, x: 50, y: 82, px: 49.5, py: 86.7, ps: 9.1, values: TRI },
-      { id: 'wet', short: 'wet', label: 'Wet channel', type: 'foot', cc: 11, x: 28, y: 82, px: 18.4, py: 90.3, ps: 19.8 },
-      { id: 'microloop', short: 'micro', label: 'Micro-looper', type: 'foot', cc: 12, x: 72, y: 82, px: 79.5, py: 90.3, ps: 19.8 },
+      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 14, x: 22, y: 12, px: 17.9, py: 10.1, ps: 20.7 },
+      { id: 'mix', short: 'mix (ramp)', label: 'Mix (Ramp)', type: 'knob', cc: 15, x: 50, y: 12, px: 48.9, py: 10.1, ps: 19.8 },
+      { id: 'length', short: 'length', label: 'Length', type: 'knob', cc: 16, x: 78, y: 12, px: 81.5, py: 10.1, ps: 19.8 },
+      { id: 'modWet', short: 'modify', label: 'Modify — wet', type: 'knob', cc: 17, x: 22, y: 33, px: 17.9, py: 30.5, ps: 20.7 },
+      { id: 'clock', short: 'clock', label: 'Clock', type: 'knob', cc: 18, x: 50, y: 33, px: 49.3, py: 30.3, ps: 19.8 },
+      { id: 'modMicro', short: 'modify', label: 'Modify — micro', type: 'knob', cc: 19, x: 78, y: 33, px: 81.8, py: 30.5, ps: 19.8 },
+      { id: 'wetmode', short: 'reverb delay slip', label: 'Wet effect', type: 'toggle', cc: 21, x: 22, y: 52, px: 19.3, py: 47.0, ps: 12.2, values: [{ label: 'reverb', value: 0 }, { label: 'delay', value: 64 }, { label: 'slip', value: 127 }] },
+      { id: 'routing', short: 'in · ○+in · ○', label: 'Routing', type: 'toggle', cc: 22, x: 50, y: 52, px: 49.5, py: 47.0, ps: 12.2, values: [{ label: 'in', value: 0 }, { label: 'loop + in', value: 64 }, { label: 'loop', value: 127 }] },
+      { id: 'micromode', short: 'stretch tape env', label: 'Micro-looper mode', type: 'toggle', cc: 23, x: 78, y: 52, px: 80.5, py: 47.0, ps: 12.2, values: [{ label: 'stretch', value: 0 }, { label: 'tape', value: 64 }, { label: 'env', value: 127 }] },
+      { id: 'bypass', short: 'bypass', label: 'Bypass mode', type: 'toggle', cc: 103, notes: 'CC 103 controls Wet channel bypass; CC 102 controls Micro-looper bypass', x: 50, y: 82, px: 49.5, py: 86.7, ps: 9.1, values: TRI },
+      { id: 'wet', short: 'wet', label: 'Wet channel', type: 'foot', cc: 103, notes: 'CC 103 toggles Wet channel bypass', x: 28, y: 82, px: 18.4, py: 90.3, ps: 19.8 },
+      { id: 'microloop', short: 'micro', label: 'Micro-looper', type: 'foot', cc: 102, notes: 'CC 102 toggles Micro-looper bypass', x: 72, y: 82, px: 79.5, py: 90.3, ps: 19.8 },
     ],
   },
   elcap: {
@@ -136,17 +155,23 @@ export const DEVICES: Record<string, Device> = {
     photo: 'assets/elcap-face.png',
     pw: 775,
     ph: 872,
+    notes: [
+      'EXP/MIDI Jack Setup: Must configure EXP/MIDI jack to MIDI mode at power-up (hold TAP footswitch, turn MIX knob until ON LED turns BLUE).',
+      'Default Channel: Defaults to MIDI Channel 1.',
+      'Bypass CC: CC 102 with value 127 engages effect; value 0 bypasses.',
+      'Clock Division: CC 25 controls Clock Division on V2 firmware.',
+    ],
     controls: [
-      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 1, x: 22, y: 13, px: 14.9, py: 18.0, ps: 17.0 },
-      { id: 'cmix', short: 'mix', label: 'Mix', type: 'knob', cc: 2, x: 78, y: 13, px: 85.1, py: 18.0, ps: 17.0 },
-      { id: 'age', short: 'tape age', label: 'Tape Age', type: 'knob', cc: 3, x: 38, y: 33, px: 38.0, py: 37.3, ps: 17.0 },
-      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 4, x: 62, y: 33, px: 62.0, py: 37.3, ps: 17.0 },
-      { id: 'wow', short: 'wow & flutter', label: 'Wow & Flutter', type: 'knob', cc: 5, x: 22, y: 45, px: 14.9, py: 42.5, ps: 17.0 },
-      { id: 'spring', short: 'spring', label: 'Spring', type: 'knob', cc: 6, x: 78, y: 45, px: 85.1, py: 42.5, ps: 17.0 },
-      { id: 'head', short: 'tape head', label: 'Tape head', type: 'toggle', cc: 7, x: 40, y: 13, px: 42.8, py: 18.0, ps: 6.7, values: [{ label: 'fixed', value: 0 }, { label: 'multi', value: 64 }, { label: 'single', value: 127 }] },
-      { id: 'cmode', short: 'mode', label: 'Mode', type: 'toggle', cc: 8, x: 60, y: 13, px: 56.9, py: 18.0, ps: 6.7, values: [{ label: 'a', value: 0 }, { label: 'b', value: 64 }, { label: 'c', value: 127 }] },
-      { id: 'tap', short: 'tap', label: 'Tap', type: 'foot', cc: 9, x: 28, y: 82, px: 18.8, py: 80.1, ps: 14.2 },
-      { id: 'onoff', short: 'on', label: 'On / bypass', type: 'foot', cc: 10, x: 72, y: 82, px: 81.8, py: 80.1, ps: 14.2 },
+      { id: 'time', short: 'time', label: 'Time', type: 'knob', cc: 12, x: 22, y: 13, px: 14.9, py: 18.0, ps: 17.0 },
+      { id: 'cmix', short: 'mix', label: 'Mix', type: 'knob', cc: 14, x: 78, y: 13, px: 85.1, py: 18.0, ps: 17.0 },
+      { id: 'age', short: 'tape age', label: 'Tape Age', type: 'knob', cc: 16, x: 38, y: 33, px: 38.0, py: 37.3, ps: 17.0 },
+      { id: 'repeats', short: 'repeats', label: 'Repeats', type: 'knob', cc: 15, x: 62, y: 33, px: 62.0, py: 37.3, ps: 17.0 },
+      { id: 'wow', short: 'wow & flutter', label: 'Wow & Flutter', type: 'knob', cc: 13, x: 22, y: 45, px: 14.9, py: 42.5, ps: 17.0 },
+      { id: 'spring', short: 'spring', label: 'Spring', type: 'knob', cc: 18, x: 78, y: 45, px: 85.1, py: 42.5, ps: 17.0 },
+      { id: 'head', short: 'tape head', label: 'Tape head', type: 'toggle', cc: 11, x: 40, y: 13, px: 42.8, py: 18.0, ps: 6.7, values: [{ label: 'fixed', value: 0 }, { label: 'multi', value: 64 }, { label: 'single', value: 127 }] },
+      { id: 'cmode', short: 'mode', label: 'Mode', type: 'toggle', cc: 19, x: 60, y: 13, px: 56.9, py: 18.0, ps: 6.7, values: [{ label: 'a', value: 0 }, { label: 'b', value: 64 }, { label: 'c', value: 127 }] },
+      { id: 'tap', short: 'tap', label: 'Tap', type: 'foot', cc: 93, notes: 'CC 93 triggers Tap tempo pulse', x: 28, y: 82, px: 18.8, py: 80.1, ps: 14.2 },
+      { id: 'onoff', short: 'on', label: 'On / bypass', type: 'foot', cc: 102, notes: 'CC 102 value 127 engages, 0 bypasses', x: 72, y: 82, px: 81.8, py: 80.1, ps: 14.2 },
     ],
   },
 };

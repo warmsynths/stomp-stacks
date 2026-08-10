@@ -5,7 +5,7 @@ import { ACTIONS, CONTROLLERS, type ActionId } from '../data/controllers.js';
 import { DEVICES, MAX_VALUE, valueOptionsFor } from '../data/devices.js';
 import { BRAINS } from '../data/brains.js';
 import type { StompState, MacroStep } from '../state/types.js';
-import type { ScribbleConfig, ScribblePresetSetting } from '../types/scribble.js';
+import { type ScribbleConfig, type ScribblePresetSetting, hexToRgbInt } from '../types/scribble.js';
 
 const CC_STATUS_BASE = 0xb0; // Control Change
 
@@ -339,17 +339,25 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
     const isPopulated = i < state.banks.length;
     let bankName = `Preset ${i + 1}`;
     let secondaryText = `Second. ${i + 1}`;
+    let presetColour = 0;
     const messages: Array<{ statusByte: number; dataByte1: number; dataByte2: number; outputs: { usbd: boolean; ble: boolean; midi1: boolean } }> = [];
 
     if (isPopulated) {
       const bank = state.banks[i];
-      let firstLabel = '';
+      const pedalNamesSet = new Set<string>();
+      const stepLabels: string[] = [];
+
       Object.keys(bank).forEach((switchKey) => {
         ACTIONS.forEach(({ id: action }) => {
           const steps = bank[switchKey][action];
           steps.forEach((step) => {
             const d = describeStep(step, state.channels);
-            if (!firstLabel) firstLabel = `${d.deviceName} ${d.label}`;
+            pedalNamesSet.add(d.deviceName.toUpperCase());
+            if (stepLabels.length < 2) stepLabels.push(`${d.deviceName} ${d.label}`);
+            if (!presetColour) {
+              const deviceDef = DEVICES[step.device];
+              if (deviceDef?.accent) presetColour = hexToRgbInt(deviceDef.accent);
+            }
             messages.push({
               statusByte: d.message.statusByte,
               dataByte1: d.message.dataByte1,
@@ -359,9 +367,11 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
           });
         });
       });
+
       if (messages.length > 0) {
-        bankName = `BANK ${i + 1}`;
-        secondaryText = firstLabel || secondaryText;
+        const pedalsArr = Array.from(pedalNamesSet);
+        bankName = pedalsArr.length ? pedalsArr.join(' + ') : `BANK ${i + 1}`;
+        secondaryText = stepLabels.join(' · ') || `Bank ${i + 1}`;
       }
     }
 
@@ -370,7 +380,7 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       bankName,
       secondaryText,
       colourOverride: messages.length > 0,
-      colour: messages.length > 0 ? 582655 : 0,
+      colour: messages.length > 0 ? (presetColour || 582655) : 0,
       textColourOverride: messages.length > 0,
       textColour: messages.length > 0 ? 16777215 : 0,
       midiValueDisplayOverride: false,
