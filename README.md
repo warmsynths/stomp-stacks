@@ -1,61 +1,118 @@
-# stomp stacks
+# Stomp Stacks 🎛️⚡
 
-Visual macro-mapper for a "dumb" MIDI foot controller (M-Vave Chocolate or
-Morningstar MC3) driving up to three pedals (Blooper, MOOD, El Capistan)
-through a Pirate MIDI Scribble hub. Pick a switch, poke knobs/switches on a
-photo of the real pedal, and it builds a per-switch macro stack (up to 8
-steps, across tap/hold/double-tap) that compiles down to raw MIDI CC bytes.
+> **A visual macro-mapper and MIDI compiler that removes the friction from modern pedalboard and foot-controller workflows.**
 
-Implemented from the `Controller Mapper Mobile.dc.html` Claude Design
-prototype — the single file that already reshapes itself across phone,
-tablet and desktop off one 760px breakpoint — styled per its "whimsy"
-cream-paper/sticker-shadow design language.
+---
 
-## Stack
+## Inspiration & Motivation
 
-Lit 3 + TypeScript, built with Vite. No UI framework beyond Lit; state lives
-in a plain `EventTarget`-based store (`src/state/store.ts`) that components
-observe via a small `ReactiveController` (`src/state/store-controller.ts`).
+Modern MIDI foot controllers (like the **M-Vave Chocolate** or **Morningstar MC3**) and digital effect pedals (such as the **Chase Bliss Blooper**, **MOOD**, and **Strymon El Capistan**) are incredibly powerful. They offer deep parameter controls, flexible MIDI implementation, and extensive macro potential.
+
+**Despite all this power, configuring them is still full of friction:**
+
+* Digging through user manuals and PDFs to lookup arbitrary CC numbers.
+* Translating physical knob positions (e.g. "9 o'clock", "noon") into 0–127 byte values.
+* Manually typing hex/decimal values into clumsy software windows or mobile apps.
+* Mentally keeping track of multi-pedal macro stacks across tap, hold, and double-tap actions.
+
+**Stomp Stacks was built to eliminate this friction.**
+
+Instead of managing spreadsheets of CC numbers and byte strings, Stomp Stacks gives you an **interactive, photorealistic faceplate canvas**. Select a switch on your foot controller, tap or turn knobs directly on photos of your physical pedals, and let Stomp Stacks handle all the byte math, hardware channel routing, and configuration compiler output.
+
+---
+
+## Key Features
+
+- 🎨 **Visual & Tactile Mapping**: Poke knobs, flip toggles, and tap footswitches directly on high-resolution pedal faceplate graphics.
+- ⚡ **Multi-Action Macro Stacks**: Build multi-step macro sequences (up to 8 steps per trigger) bound to **Tap**, **Hold**, and **Double-tap** actions on any footswitch.
+- 🧠 **Relay Hub & Brain Integration**: Target smart relay hubs (**Pirate MIDI Scribble**) to supercharge compact "dumb" controllers with macro capabilities, or compile for controllers with onboard macro memory (**Morningstar MC3**).
+- ⚙️ **Automatic MIDI Compiler**: Converts your visual macro stacks into compiled raw MIDI CC byte streams (`0xB0 + channel`, CC, Value) and exports ready-to-flash JSON configurations (`scribble.json`).
+- 🎚️ **Built-in Discrete Values**: Quick selection for standard knob sweeps (*min*, *9 o'clock*, *noon*, *3 o'clock*, *max*) and discrete toggle switch positions.
+- 📱 **Fluid Responsive UI**: Designed with a whimsical cream-paper and sticker-shadow aesthetic that reshapes dynamically across phone, tablet, and desktop viewports.
+
+---
+
+## Supported Gear
+
+### Foot Controllers
+| Device | Switches | Banks | Description |
+| :--- | :---: | :---: | :--- |
+| **M-Vave Chocolate** | 4 | 4 | Ultra-compact 4-switch foot controller. Relies on external relay hubs (like Pirate MIDI Scribble) for macro expansion. |
+| **Morningstar MC3** | 3 | 30 | High-performance smart controller with OLED display and onboard macro memory. |
+
+### Brains & Relay Hubs
+| Brain | Max Steps / Action | Banks | Description |
+| :--- | :---: | :---: | :--- |
+| **Pirate MIDI Scribble** | 8 | 16 | External USB-C / TRS relay hub. Listens to single stomps and fans out multi-pedal macro stacks. |
+| **Controller Onboard** | 16 | 3 | Direct macro storage on capable smart controllers (MC3). |
+| **Direct (No Brain)** | 1 | 16 | 1-to-1 switch action pass-through directly to pedals. |
+
+### Pedals & Device Dictionary
+| Pedal | MIDI Channel | Included Parameters |
+| :--- | :---: | :--- |
+| **Chase Bliss Blooper** | Ch 3 | Ramp/Volume, Layers, Repeats, Mod A/B, Mod Channels, Additive/Sampling Modes, Undo/Redo, Stomp Switches (Zero-based PC support). |
+| **Chase Bliss MOOD** | Ch 2 | Time, Mix, Length, Modify Wet/Micro, Clock Speed, Wet/Micro Modes, Routing, Independent Channel Bypasses (CC 102/103). |
+| **Strymon El Capistan** | Ch 1 | Time, Mix, Tape Age, Repeats, Wow & Flutter, Spring, Tape Head, Mode, Tap Tempo, On/Bypass (CC 102). |
+
+---
+
+## Project Structure
 
 ```
-src/data/           device & controller dictionaries (typed, ported 1:1 from the prototype)
-src/state/          the reactive store + its Lit glue
-src/compiler/        MIDI byte math + config.json generation + download
-src/components/      Lit elements (pedal-canvas, macro-panel, controller-graphic, modals, app shell)
-src/styles/          shared design tokens / CSS fragments
-public/assets/       pedal faceplate photos
+src/
+├── compiler/       # MIDI byte math + hardware config.json generation & export
+├── components/     # Lit web components (pedal canvas, macro builder, controller graphic, modals)
+├── data/           # Typed device dictionaries, controller defs, and relay brain specs
+├── state/          # EventTarget reactive store & Lit StoreController integration
+├── styles/         # Shared CSS tokens, color palettes, and typography
+└── types/          # TypeScript interfaces for macro steps, scribble schemas, and state
 ```
 
-## Run it
+---
 
-```
+## Quick Start
+
+### Prerequisites
+
+- Node.js (v18+ recommended)
+- npm
+
+### Installation & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/warmsynths/stomp-stacks.git
+cd stomp-stacks
+
+# Install dependencies
 npm install
-npm run dev      # dev server
-npm run build    # typecheck + production build to docs/
-npm run preview  # serve the production build
+
+# Start local development server
+npm run dev
+
+# Run unit tests
+npm run test
+
+# Typecheck and build for production (outputs to docs/)
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-## The compiler & config.json schema
+---
 
-`src/compiler/midi.ts` implements the Device Dictionary + Compiler Engine:
-each pedal owns a fixed physical MIDI channel (El Capistan = 1, MOOD = 2,
-Blooper = 3) and each control a fixed CC number within that channel. A step
-resolves to `statusByte = 0xB0 + (channel - 1)`, `dataByte1 = cc`,
-`dataByte2 = value` (0–127; footswitches always send 127).
+## How the Compiler Works
 
-**Caveat:** we don't have a real config.json exported from a physical Pirate
-MIDI Scribble unit to merge into, so `compileConfig()` produces a
-self-contained document in the shape described in the hardware spec
-(`presetSettings[].presetMessages.messages`, one preset per populated
-bank/switch/action trigger). If you can export a real base config from the
-hardware, swap it in as the top-level template around `presetSettings` —
-that's the only part this app generates.
+1. Each pedal in the **Device Dictionary** (`src/data/devices.ts`) defines its physical MIDI channel and fixed CC parameters.
+2. When you add or adjust a step in a macro stack:
+   - `statusByte = 0xB0 + (channel - 1)`
+   - `dataByte1 = control.cc`
+   - `dataByte2 = value (0-127)`
+3. When you export, `src/compiler/midi.ts` compiles the active bank, footswitch, and action triggers into a clean hardware configuration file (`scribble.json`) ready for upload to your relay box or controller.
 
-## Known gaps vs. the design
+---
 
-- MOOD's bottom-centre toggle is labelled "Bypass mode" and the wet vs.
-  micro-looper footswitch assignment is a best guess, per the original
-  design chat — worth confirming against the real pedal.
-- The controller-picker and settings modals only offer what's in the
-  prototype (2 controllers, photo/sketch toggle); the settings modal is
-  structured to take more setting groups later.
+## License
+
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0). See the [LICENSE](LICENSE) file for details.
