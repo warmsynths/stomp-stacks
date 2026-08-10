@@ -1,6 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton } from '../styles/shared.js';
+import { CONTROLLERS } from '../data/controllers.js';
+import { BRAINS } from '../data/brains.js';
+import { DEVICES } from '../data/devices.js';
 import { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
@@ -11,16 +14,16 @@ import './macro-panel.js';
 import './compile-modal.js';
 import './settings-modal.js';
 import './controller-picker-modal.js';
+import './brain-picker-modal.js';
+import './add-pedal-modal.js';
+import './confirm-remove-modal.js';
 
 const PHONE_BREAKPOINT = 760;
-/** Below this, tablet/phone (Mobile.dc.html) layout; at/above, desktop (Whimsy.dc.html) layout. */
+/** Below this, tablet/phone layout; at/above, desktop layout. */
 const DESKTOP_BREAKPOINT = 1120;
 
 /** App root: owns the single StompStore instance and picks between the two
- * distinct designs by viewport width — the compact single-column shell
- * (tablet side rail / phone bottom sheet, from Controller Mapper Mobile.dc.html)
- * below 1120px, and the desktop shell (aside with bank tabs built into the
- * controller strip, from Controller Mapper Whimsy.dc.html) at/above it. */
+ * distinct designs by viewport width. */
 @customElement('stomp-app')
 export class StompApp extends LitElement {
   static styles = [
@@ -46,19 +49,19 @@ export class StompApp extends LitElement {
       header {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         padding: 0 14px;
-        height: 56px;
+        height: 58px;
         flex: none;
         border-bottom: 2.5px solid var(--ink);
         background: var(--card);
       }
       :host([phone]) header {
-        gap: 7px;
+        gap: 9px;
         padding: 0 10px;
       }
       :host([desktop]) header {
-        gap: 18px;
+        gap: 14px;
         padding: 0 26px;
         height: 70px;
       }
@@ -83,74 +86,69 @@ export class StompApp extends LitElement {
       .brand {
         display: flex;
         align-items: center;
-        gap: 11px;
+        gap: 10px;
+        flex: none;
       }
       .wordmark {
-        font-size: 17px;
+        font-size: 16.5px;
         font-weight: 600;
         letter-spacing: -0.02em;
         white-space: nowrap;
       }
       :host([phone]) .wordmark {
-        display: none;
+        display: inline;
       }
       :host([desktop]) .wordmark {
         font-size: 19px;
       }
-      .wordmark-sub {
-        font-family: var(--mono);
-        font-size: 11px;
-        opacity: 0.55;
-        white-space: nowrap;
-      }
       .spacer {
         flex: 1;
       }
-      .midi-pill {
-        display: none;
+      .rig-bar {
+        display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 5px 11px;
-        border-radius: 20px;
-        background: #e3f3d9;
+      }
+      .rig-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 5px 12px;
+        border-radius: 14px;
         border: 2px solid var(--ink);
+        line-height: 1.3;
+        text-align: left;
+        transition: box-shadow 150ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .rig-chip:hover {
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .rig-chip-lbl {
         font-family: var(--mono);
-        font-size: 11px;
-        white-space: nowrap;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.5;
       }
-      :host([desktop]) .midi-pill {
-        display: flex;
-      }
-      .midi-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #5bb85b;
-      }
-      .bank-tabs {
-        display: flex;
-        gap: 5px;
-        flex: none;
-      }
-      :host([desktop]) .bank-tabs {
-        display: none;
-      }
-      .bank-tab {
-        width: 32px;
-        flex: none;
-        white-space: nowrap;
-        padding: 5px 0;
-        border-radius: 11px;
-        font-size: 12px;
+      .rig-chip-val {
+        font-size: 12.5px;
         font-weight: 600;
-        border: 2px solid var(--ink);
-        transition:
-          background 150ms ease,
-          opacity 150ms ease;
       }
-      :host([phone]) .bank-tab {
-        width: 27px;
-        font-size: 11px;
+      .rig-arrow {
+        font-size: 12px;
+        opacity: 0.3;
+        padding: 0 7px;
+      }
+      .rig-compact-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 11px;
+        border-radius: 16px;
+        border: 2px solid var(--ink);
+        background: #e8f4fa;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        flex: none;
       }
       .settings-btn {
         width: 34px;
@@ -162,7 +160,7 @@ export class StompApp extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 14px;
+        font-size: 15px;
         transition: background 150ms ease;
       }
       .settings-btn:hover {
@@ -176,12 +174,12 @@ export class StompApp extends LitElement {
       .cook-btn {
         display: flex;
         align-items: center;
-        gap: 7px;
-        padding: 8px 13px;
-        border-radius: 19px;
+        gap: 9px;
+        padding: 9px 14px;
+        border-radius: 22px;
         background: var(--mustard);
         border: 2.5px solid var(--ink);
-        box-shadow: 2px 2px 0 var(--ink);
+        box-shadow: 3px 3px 0 var(--ink);
         font-size: 13px;
         font-weight: 600;
         flex: none;
@@ -191,35 +189,19 @@ export class StompApp extends LitElement {
       }
       .cook-btn:active {
         transform: translate(2px, 2px);
-        box-shadow: 0 0 0 var(--ink);
+        box-shadow: 1px 1px 0 var(--ink);
       }
       :host([desktop]) .cook-btn {
-        gap: 10px;
         padding: 10px 18px;
-        border-radius: 22px;
-        box-shadow: 3px 3px 0 var(--ink);
         font-size: 14px;
-      }
-      :host([desktop]) .cook-btn:hover {
-        box-shadow: 5px 5px 0 var(--ink);
-        transform: translate(-1px, -1px);
-      }
-      :host([desktop]) .cook-btn:active {
-        transform: translate(2px, 2px);
-        box-shadow: 1px 1px 0 var(--ink);
       }
       .cook-count {
         font-family: var(--mono);
-        font-size: 10px;
-        padding: 1px 6px;
-        border-radius: 9px;
-        background: var(--ink);
-        color: var(--mustard);
-      }
-      :host([desktop]) .cook-count {
-        font-size: 11px;
+        font-size: 10.5px;
         padding: 1px 7px;
         border-radius: 10px;
+        background: var(--ink);
+        color: var(--mustard);
       }
       .body {
         flex: 1;
@@ -270,6 +252,8 @@ export class StompApp extends LitElement {
         font-family: var(--mono);
         font-size: 11px;
         opacity: 0.5;
+        flex: none;
+        padding-top: 9px;
       }
     `,
   ];
@@ -308,14 +292,12 @@ export class StompApp extends LitElement {
           <div class="brand">
             <span class="logo">S</span>
             <span class="wordmark">stomp stacks</span>
-            ${this.desktop ? html`<span class="wordmark-sub">for the chocolate</span>` : null}
           </div>
           <div class="spacer"></div>
-          <div class="midi-pill"><span class="midi-dot"></span><span>midi out · ch 1</span></div>
-          ${this.desktop ? null : this.renderBankTabs()}
+          ${this.renderHeaderRig()}
           <button class="settings-btn" title="settings" @click=${() => this.store.openSettings()}>⚙</button>
           <button class="cook-btn" @click=${() => this.store.openCompile()}>
-            ${this.desktop ? 'cook it up' : 'cook'}
+            <span>${this.desktop ? 'cook it up' : 'cook'}</span>
             <span class="cook-count">${total}</span>
           </button>
         </header>
@@ -323,27 +305,58 @@ export class StompApp extends LitElement {
         ${this.desktop ? this.renderDesktopBody() : this.renderCompactBody()}
       </div>
 
-      <compile-modal .store=${this.store} ?desktop=${this.desktop}></compile-modal>
+      <compile-modal .store=${this.store} ?phone=${this.phone}></compile-modal>
       <settings-modal .store=${this.store}></settings-modal>
       <controller-picker-modal .store=${this.store}></controller-picker-modal>
+      <brain-picker-modal .store=${this.store}></brain-picker-modal>
+      <add-pedal-modal .store=${this.store}></add-pedal-modal>
+      <confirm-remove-modal .store=${this.store}></confirm-remove-modal>
     `;
   }
 
-  private renderBankTabs() {
+  private renderHeaderRig() {
     const st = this.store.state;
+    const ctrl = CONTROLLERS[st.controllerId];
+    const brain = BRAINS[st.brainId];
+    const pedalSummary =
+      st.rig.length <= 2
+        ? st.rig.map((id) => DEVICES[id]?.name || id).join(', ')
+        : `${st.rig.slice(0, 2).map((id) => DEVICES[id]?.name || id).join(', ')} +${st.rig.length - 2}`;
+
+    if (this.phone) {
+      return html`
+        <button class="rig-compact-btn" title="rig" @click=${() => this.store.openBrainPicker()}>
+          ${ctrl.short} → ${brain.short}
+        </button>
+      `;
+    }
+
     return html`
-      <div class="bank-tabs">
-        ${st.banks.map(
-          (_, i) => html`
-            <button
-              class="bank-tab"
-              style=${i === st.bank ? 'background:var(--mustard)' : 'background:transparent;opacity:.45'}
-              @click=${() => this.store.selectBank(i)}
-            >
-              0${i + 1}
-            </button>
-          `,
-        )}
+      <div class="rig-bar">
+        <button
+          class="rig-chip"
+          style="background:#e8f4fa"
+          title="change controller"
+          @click=${() => this.store.openControllerPicker()}
+        >
+          <span class="rig-chip-lbl">controller</span>
+          <span class="rig-chip-val">${ctrl.short}</span>
+        </button>
+        <span class="rig-arrow">→</span>
+        <button
+          class="rig-chip"
+          style="background:${brain.colour}55"
+          title="what expands one stomp into a stack"
+          @click=${() => this.store.openBrainPicker()}
+        >
+          <span class="rig-chip-lbl">brain</span>
+          <span class="rig-chip-val">${brain.short}</span>
+        </button>
+        <span class="rig-arrow">→</span>
+        <div class="rig-chip" style="background:var(--paper);cursor:default">
+          <span class="rig-chip-lbl">pedals</span>
+          <span class="rig-chip-val">${pedalSummary}</span>
+        </div>
       </div>
     `;
   }
@@ -367,7 +380,7 @@ export class StompApp extends LitElement {
         <main>
           <div class="desktop-tabs-row">
             <span class="pedal-label">pedal</span>
-            <device-tabs .store=${this.store}></device-tabs>
+            <device-tabs .store=${this.store} style="flex:1;min-width:0"></device-tabs>
           </div>
           <pedal-canvas .store=${this.store} desktop></pedal-canvas>
         </main>

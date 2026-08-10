@@ -16,6 +16,7 @@ export type FaceMode = 'photo' | 'drawn';
 
 export interface StompState {
   controllerId: string;
+  brainId: string;
   banks: Bank[];
   bank: number;
   selectedKey: string;
@@ -27,6 +28,13 @@ export interface StompState {
   compileOpen: boolean;
   settingsOpen: boolean;
   controllerPickerOpen: boolean;
+  brainPickerOpen: boolean;
+  addPedalOpen: boolean;
+  confirmRemovePedal: string | null;
+  channelPickerOpen: boolean;
+  targetId: string;
+  rig: string[];
+  channels: Record<string, number>;
   /** Phone-only bottom sheet expanded state. */
   sheetOpen: boolean;
 }

@@ -20,6 +20,7 @@ function newBanks(controllerId: string): Bank[] {
 function initialState(controllerId: string): StompState {
   return {
     controllerId,
+    brainId: 'scribble',
     banks: newBanks(controllerId),
     bank: 0,
     selectedKey: CONTROLLERS[controllerId].keys[0],
@@ -30,6 +31,13 @@ function initialState(controllerId: string): StompState {
     compileOpen: false,
     settingsOpen: false,
     controllerPickerOpen: false,
+    brainPickerOpen: false,
+    addPedalOpen: false,
+    confirmRemovePedal: null,
+    channelPickerOpen: false,
+    targetId: 'scribble',
+    rig: ['blooper', 'mood', 'elcap'],
+    channels: { blooper: 1, mood: 2, elcap: 3 },
     sheetOpen: false,
   };
 }
@@ -75,6 +83,74 @@ export class StompStore extends EventTarget {
       }
     }
     return total;
+  }
+
+  nextFreeChannel(rig: string[] = this.state.rig, channels: Record<string, number> = this.state.channels): number {
+    const taken: Record<number, boolean> = {};
+    rig.forEach((id) => {
+      if (channels[id]) taken[channels[id]] = true;
+    });
+    for (let n = 1; n <= 16; n++) {
+      if (!taken[n]) return n;
+    }
+    return 1;
+  }
+
+  addPedal(id: string) {
+    if (this.state.rig.includes(id)) {
+      this.set({ addPedalOpen: false, browseDevice: id });
+      return;
+    }
+    const rig = [...this.state.rig, id];
+    const channels = { ...this.state.channels };
+    if (!channels[id]) {
+      channels[id] = this.nextFreeChannel(rig.filter((x) => x !== id), channels);
+    }
+    this.set({ rig, channels, browseDevice: id, addPedalOpen: false, popoverControlId: null });
+  }
+
+  dropPedal(id: string) {
+    if (this.state.rig.length <= 1) return;
+    const rig = this.state.rig.filter((x) => x !== id);
+    const browseDevice = this.state.browseDevice === id ? rig[0] : this.state.browseDevice;
+    this.set({ rig, browseDevice, channelPickerOpen: false, popoverControlId: null, confirmRemovePedal: null });
+  }
+
+  setPedalChannel(id: string, channel: number) {
+    const channels = { ...this.state.channels, [id]: channel };
+    this.set({ channels, channelPickerOpen: false });
+  }
+
+  toggleChannelPicker() {
+    this.set({ channelPickerOpen: !this.state.channelPickerOpen });
+  }
+
+  setBrain(id: string) {
+    this.set({ brainId: id, brainPickerOpen: false });
+  }
+
+  openBrainPicker() {
+    this.set({ brainPickerOpen: true, channelPickerOpen: false });
+  }
+
+  closeBrainPicker() {
+    this.set({ brainPickerOpen: false });
+  }
+
+  openAddPedal() {
+    this.set({ addPedalOpen: true, channelPickerOpen: false });
+  }
+
+  closeAddPedal() {
+    this.set({ addPedalOpen: false });
+  }
+
+  setConfirmRemove(id: string | null) {
+    this.set({ confirmRemovePedal: id, channelPickerOpen: false });
+  }
+
+  setTarget(id: string) {
+    this.set({ targetId: id });
   }
 
   /** A knob/toggle opens its value popover; a footswitch assigns immediately (momentary). */
@@ -131,7 +207,7 @@ export class StompStore extends EventTarget {
   }
 
   setBrowseDevice(id: string) {
-    this.set({ browseDevice: id, popoverControlId: null });
+    this.set({ browseDevice: id, popoverControlId: null, channelPickerOpen: false });
   }
 
   closePopover() {

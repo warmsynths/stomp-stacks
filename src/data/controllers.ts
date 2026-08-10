@@ -3,6 +3,7 @@
 export interface ControllerDef {
   id: string;
   name: string;
+  short: string;
   sub: string;
   keys: string[];
   /** Switch cap positions, percent of the strip, one pair per key. */
@@ -14,12 +15,14 @@ export interface ControllerDef {
   heightDesktop: number;
   banks: number;
   screen: boolean;
+  onboard: boolean;
 }
 
 export const CONTROLLERS: Record<string, ControllerDef> = {
   chocolate: {
     id: 'chocolate',
     name: 'M-Vave Chocolate',
+    short: 'chocolate',
     sub: '4 switches · 4 banks',
     keys: ['A', 'B', 'C', 'D'],
     x: [14, 38, 62, 86],
@@ -28,10 +31,12 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     heightDesktop: 80,
     banks: 4,
     screen: false,
+    onboard: false,
   },
   mc3: {
     id: 'mc3',
     name: 'Morningstar MC3',
+    short: 'mc3',
     sub: '3 switches · 3 banks',
     keys: ['A', 'B', 'C'],
     x: [26, 74, 50],
@@ -40,6 +45,7 @@ export const CONTROLLERS: Record<string, ControllerDef> = {
     heightDesktop: 170,
     banks: 3,
     screen: true,
+    onboard: true,
   },
 };
 
