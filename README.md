@@ -31,7 +31,7 @@ public/assets/       pedal faceplate photos
 ```
 npm install
 npm run dev      # dev server
-npm run build    # typecheck + production build to dist/
+npm run build    # typecheck + production build to docs/
 npm run preview  # serve the production build
 ```
 
