@@ -174,9 +174,40 @@ export const DEVICES: Record<string, Device> = {
       { id: 'onoff', short: 'on', label: 'On / bypass', type: 'foot', cc: 102, notes: 'CC 102 value 127 engages, 0 bypasses', x: 72, y: 82, px: 81.8, py: 80.1, ps: 14.2 },
     ],
   },
+  genloss: {
+    id: 'genloss',
+    name: 'generation loss',
+    faceName: 'generation loss',
+    sub: 'video decay',
+    accent: '#6d93ad',
+    body: '#a9c3d4',
+    ink: '#1f3b4d',
+    midiChannel: 4,
+    photo: 'assets/genloss-face.png',
+    pw: 497,
+    ph: 944,
+    notes: [
+      'TRS MIDI Connection: Uses Chase Bliss 1/4" TRS Ring Active MIDI connection.',
+      'Default Channel: Configurable MIDI Channel (defaults to Channel 4 in multi-pedal rigs).',
+    ],
+    controls: [
+      { id: 'wow', short: 'wow', label: 'Wow', type: 'knob', cc: 14, x: 22, y: 12, px: 18.3, py: 8.7, ps: 22.1 },
+      { id: 'volume', short: 'volume ramp', label: 'Volume (Ramp)', type: 'knob', cc: 15, x: 50, y: 12, px: 49.5, py: 8.7, ps: 21.1 },
+      { id: 'model', short: 'model', label: 'Model / LP', type: 'knob', cc: 16, x: 78, y: 12, px: 82.7, py: 8.7, ps: 21.1 },
+      { id: 'flutter', short: 'flutter', label: 'Flutter', type: 'knob', cc: 17, x: 22, y: 33, px: 18.3, py: 29.7, ps: 22.1 },
+      { id: 'saturate', short: 'saturate', label: 'Saturate / Gen', type: 'knob', cc: 18, x: 50, y: 33, px: 49.5, py: 29.7, ps: 21.1 },
+      { id: 'failure', short: 'failure', label: 'Failure / HP', type: 'knob', cc: 19, x: 78, y: 33, px: 82.7, py: 29.7, ps: 21.1 },
+      { id: 'aux', short: 'stop filter fail', label: 'Aux', type: 'toggle', cc: 21, x: 22, y: 52, px: 17.7, py: 47.0, ps: 13.0, values: [{ label: 'stop', value: 0 }, { label: 'filter', value: 64 }, { label: 'fail', value: 127 }] },
+      { id: 'dry', short: 'none small unity', label: 'Dry', type: 'toggle', cc: 22, x: 50, y: 52, px: 48.9, py: 46.5, ps: 13.0, values: [{ label: 'none', value: 0 }, { label: 'small', value: 64 }, { label: 'unity', value: 127 }] },
+      { id: 'noise', short: 'none mild heavy', label: 'Noise', type: 'toggle', cc: 23, x: 78, y: 52, px: 81.3, py: 46.5, ps: 13.0, values: [{ label: 'none', value: 0 }, { label: 'mild', value: 64 }, { label: 'heavy', value: 127 }] },
+      { id: 'preset', short: 'preset', label: 'Preset toggle', type: 'toggle', cc: 101, x: 50, y: 82, px: 49.5, py: 85.8, ps: 9.5, values: TRI },
+      { id: 'auxSw', short: 'aux', label: 'Aux switch', type: 'foot', cc: 103, x: 28, y: 82, px: 17.7, py: 91.5, ps: 21.1 },
+      { id: 'bypass', short: 'bypass', label: 'Bypass', type: 'foot', cc: 102, x: 72, y: 82, px: 79.7, py: 91.5, ps: 21.1 },
+    ],
+  },
 };
 
-export const DEVICE_ORDER = ['blooper', 'mood', 'elcap'];
+export const DEVICE_ORDER = ['blooper', 'mood', 'elcap', 'genloss'];
 
 export function valueOptionsFor(control: DeviceControl): ControlValueOption[] {
   if (control.values) return control.values;

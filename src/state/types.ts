@@ -1,4 +1,5 @@
 import type { ActionId } from '../data/controllers.js';
+import type { ColorName, TextColorName } from '../data/naming.js';
 
 export interface MacroStep {
   device: string;
@@ -13,6 +14,24 @@ export type ActionBucket = { press: MacroStep[]; hold: MacroStep[]; double: Macr
 export type Bank = Record<string, ActionBucket>;
 
 export type FaceMode = 'photo' | 'drawn';
+
+export interface PresetNaming {
+  name?: string;
+  secondary?: string;
+  color?: ColorName | null;
+  textColor?: TextColorName;
+}
+
+export interface IdentResult {
+  name: string;
+  secondary: string;
+  color: ColorName | null;
+  textColor: TextColorName;
+  autoText: boolean;
+  raw: PresetNaming;
+  auto: string;
+  autoSec: string;
+}
 
 export interface StompState {
   controllerId: string;
@@ -32,9 +51,12 @@ export interface StompState {
   addPedalOpen: boolean;
   confirmRemovePedal: string | null;
   channelPickerOpen: boolean;
+  colorPickerOpen: boolean;
   targetId: string;
   rig: string[];
   channels: Record<string, number>;
+  /** Naming & color overrides keyed by "bankIndex:switchKey" (e.g. "0:A"). */
+  naming: Record<string, PresetNaming>;
   /** Phone-only bottom sheet expanded state. */
   sheetOpen: boolean;
 }

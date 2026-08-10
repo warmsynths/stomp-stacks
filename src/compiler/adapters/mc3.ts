@@ -49,6 +49,19 @@ export function describeStep(step: MacroStep, channels?: Record<string, number>)
   };
 }
 
+import { NAMING, FALLBACK, type ColorName } from '../../data/naming.js';
+
+export function colorForTarget(targetId: string, colorName: ColorName | null): ColorName | null {
+  if (!colorName) return null;
+  const t = NAMING[targetId];
+  if (!t) return null;
+  if (t.colors === null) return colorName;
+  if (!t.colors.length) return null;
+  if (t.colors.includes(colorName)) return colorName;
+  const f = FALLBACK[colorName];
+  return f && t.colors.includes(f) ? f : t.colors[0];
+}
+
 export function compileMc3Json(state: StompState) {
   const NAME_MAP: Record<string, string> = { press: 'Press', hold: 'Long Press', double: 'Double Tap' };
   const presets: any[] = [];
@@ -65,7 +78,17 @@ export function compileMc3Json(state: StompState) {
         }
       });
       if (Object.keys(acts).length) {
-        presets.push({ bank: bankIndex + 1, preset: switchKey, name: switchKey, actions: acts });
+        const namingKey = `${bankIndex}:${switchKey}`;
+        const n = (state.naming && state.naming[namingKey]) || {};
+        const name = n.name ? n.name.slice(0, 8) : switchKey;
+        const ledColour = colorForTarget('mc3', n.color || null);
+        presets.push({
+          bank: bankIndex + 1,
+          preset: switchKey,
+          name,
+          ledColour,
+          actions: acts,
+        });
       }
     });
   });

@@ -50,7 +50,7 @@ export function compileRigJson(state: StompState) {
     controller: state.controllerId,
     brain: state.brainId,
     pedals,
-    banks: state.banks.map((b) => {
+    banks: state.banks.map((b, bi) => {
       const outBank: Record<string, any> = {};
       Object.keys(b).forEach((k) => {
         const outActions: Record<string, any> = {};
@@ -63,7 +63,17 @@ export function compileRigJson(state: StompState) {
             }));
           }
         });
-        if (Object.keys(outActions).length) outBank[k] = outActions;
+        if (Object.keys(outActions).length) {
+          const namingKey = `${bi}:${k}`;
+          const n = (state.naming && state.naming[namingKey]) || {};
+          outBank[k] = {
+            name: n.name || '',
+            secondary: n.secondary || '',
+            color: n.color || null,
+            textColor: n.textColor || 'ink',
+            actions: outActions,
+          };
+        }
       });
       return outBank;
     }),

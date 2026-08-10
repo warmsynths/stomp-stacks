@@ -30,8 +30,14 @@ export class LabelsTargetAdapter implements TargetAdapter {
     push(`via ${brain.full.toLowerCase()}`, { muted: true });
 
     eachStack(state, (bi, k, _ki, a, l) => {
+      const namingKey = `${bi}:${k}`;
+      const n = (state.naming && state.naming[namingKey]) || {};
+      const name = n.name || `switch ${k}`;
+
       push('');
-      push(`bank ${bi + 1}  ·  switch ${k}  ·  ${a.label}`, { bold: true });
+      push(`${name}  ·  ${a.label}`, { bold: true });
+      if (n.secondary) push(n.secondary);
+      push(`bank ${bi + 1} · switch ${k}${n.color ? ` · ${n.color}` : ''}`, { muted: true });
       l.forEach((s, i) => {
         const d = describeStep(s, state.channels);
         push(`   ${i + 1}. ${d.deviceName} — ${d.label}`);

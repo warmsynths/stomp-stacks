@@ -19,11 +19,26 @@ export function eachStack(
   });
 }
 
+import { HEX, TEXTHEX } from '../../data/naming.js';
+
 export function compileScribbleMacroJson(state: StompState) {
   const macros: any[] = [];
-  eachStack(state, (bankIndex, _key, keyIndex, action, list) => {
+  eachStack(state, (bankIndex, key, keyIndex, action, list) => {
+    const namingKey = `${bankIndex}:${key}`;
+    const n = (state.naming && state.naming[namingKey]) || {};
+    const name = n.name ? n.name.slice(0, 12) : '';
+    const secondary = n.secondary ? n.secondary.slice(0, 12) : '';
+    const mainColour = n.color ? HEX[n.color] : null;
+    const textColour = n.textColor ? TEXTHEX[n.textColor] : '#f7f1e3';
+
     macros.push({
       trigger: { bank: bankIndex + 1, cc: 80 + keyIndex, action: action.id },
+      strip: {
+        name,
+        secondary,
+        mainColour,
+        textColour,
+      },
       messages: list.map((s) => {
         const d = describeStep(s, state.channels);
         return [176 + d.channel - 1, d.cc, d.value];

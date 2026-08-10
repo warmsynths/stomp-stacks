@@ -59,6 +59,8 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
     addPedalOpen: false,
     confirmRemovePedal: null,
     channelPickerOpen: false,
+    colorPickerOpen: false,
+    naming: {},
     sheetOpen: false,
     banks: [
       {

@@ -3,15 +3,14 @@ import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
 import { ACTIONS } from '../data/controllers.js';
 import { HardwareRegistry } from '../data/registry.js';
+import { PALETTE, HEX, TEXTS, TEXTHEX } from '../data/naming.js';
 import { MAX_STEPS } from '../state/store.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import { describeStep } from '../compiler/midi.js';
 
-/** The macro-stack rail: action tabs (tap/hold/double), the value popover for
- * whichever knob/toggle is being set, and the ordered list of assigned steps
- * for the active switch+action. Docks as a side rail on tablet/desktop and a
- * collapsible bottom sheet on phone. */
+/** The macro-stack rail: action tabs (tap/hold/double), preset name & color picker,
+ * value popover, and assigned steps list. */
 @customElement('macro-panel')
 export class MacroPanel extends LitElement {
   static styles = [
@@ -60,10 +59,202 @@ export class MacroPanel extends LitElement {
         padding: 15px 18px 13px;
       }
       .head-row {
+        position: relative;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+        margin-bottom: 9px;
+      }
+      .switch-tag {
+        flex: none;
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 10px;
+        background: var(--ink);
+        color: var(--panel-warm);
+      }
+      .strip-card {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1px;
+        padding: 6px 11px;
+        border-radius: 13px;
+        border: 2.5px solid var(--ink);
+        transition: background 200ms ease;
+      }
+      .name-input {
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+        outline: none;
+      }
+      .secondary-input {
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.35;
+        opacity: 0.72;
+        outline: none;
+      }
+      .color-btn {
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: 9px;
+        border: 2.5px solid var(--ink);
+        transition: box-shadow 150ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .color-btn:hover {
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .color-popover {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 30;
+        width: 262px;
+        max-width: 100%;
+        padding: 14px;
+        border-radius: 20px;
+        background: var(--card);
+        border: 2.5px solid var(--ink);
+        box-shadow: 5px 5px 0 var(--ink);
+        animation: sheetIn 170ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .color-pop-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         margin-bottom: 10px;
+      }
+      .color-pop-title {
+        flex: 1;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .color-pop-close {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid var(--ink);
+        font-size: 12px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .color-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 7px;
+      }
+      .color-swatch {
+        height: 30px;
+        border-radius: 11px;
+        border: 2.5px solid var(--ink);
+        transition:
+          box-shadow 150ms cubic-bezier(0.23, 1, 0.32, 1),
+          transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .color-swatch[active] {
+        box-shadow:
+          0 0 0 3px #16323d inset,
+          3px 3px 0 var(--ink);
+      }
+      .color-swatch[disabled] {
+        opacity: 0.22;
+        pointer-events: none;
+      }
+      .text-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 11px;
+        padding-top: 11px;
+        border-top: 2px solid rgba(22, 50, 61, 0.15);
+      }
+      .text-lbl {
+        flex: 1;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .text-opt {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex: none;
+        padding: 4px 9px 4px 5px;
+        border-radius: 11px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink);
+        transition:
+          box-shadow 150ms cubic-bezier(0.23, 1, 0.32, 1),
+          opacity 150ms ease;
+      }
+      .text-opt[active] {
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .text-opt:not([active]) {
+        opacity: 0.55;
+      }
+      .text-dot {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 5px;
+        border: 2px solid var(--ink);
+      }
+      .color-pop-note {
+        margin-top: 10px;
+        font-size: 11px;
+        line-height: 1.45;
+        opacity: 0.6;
+        text-wrap: pretty;
+      }
+      .flags-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .flag-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        border: 2px solid var(--ink);
+        background: #ffe6dd;
+        font-size: 11.5px;
+        transition: box-shadow 150ms ease;
+      }
+      .flag-btn:hover {
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .flag-dot {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 3px;
+        border: 2px solid var(--ink);
+        background: var(--mustard);
       }
       .title {
         flex: 1;
@@ -373,17 +564,143 @@ export class MacroPanel extends LitElement {
     const popDevice = HardwareRegistry.getDevice(st.browseDevice);
     const popControl = st.popoverControlId ? HardwareRegistry.getControl(st.browseDevice, st.popoverControlId) : null;
 
+    const idNow = this.store.ident(st.bank, st.selectedKey);
+    const shared = this.store.sharedColors();
+    const dimmed = PALETTE.map((p) => p[0]).filter((n) => shared.length > 0 && !shared.includes(n));
+    const canName = this.store.displayTargets().length > 0 || shared.length > 0;
+    const stripBg = idNow.color ? HEX[idNow.color] : '#16323d';
+    const stripInk = TEXTHEX[idNow.textColor];
+
+    const flags: string[] = [];
+    if (canName) {
+      this.store.displayTargets().forEach((t) => {
+        if (idNow.raw.name && idNow.name.length > t.name) {
+          flags.push(`${t.label.toLowerCase()} shows “${idNow.name.slice(0, t.name)}”`);
+        }
+        if (idNow.secondary && !t.secondary) {
+          flags.push(`${t.label.toLowerCase()} drops the second line`);
+        } else if (idNow.secondary && idNow.secondary.length > t.secondary) {
+          flags.push(`${t.label.toLowerCase()} trims line two to “${idNow.secondary.slice(0, t.secondary)}”`);
+        }
+      });
+      if (idNow.color && shared.length > 0 && !shared.includes(idNow.color)) {
+        const cant = this.store.namingTargets().filter((t) => t.colors && t.colors.length > 0 && !t.colors.includes(idNow.color!));
+        if (cant.length) {
+          flags.push(`${idNow.color} is out of range on ${cant.map((t) => t.label.toLowerCase()).join(' + ')}`);
+        }
+      }
+    }
+
     return html`
       <button class="grabber" @click=${() => this.store.toggleSheet()}></button>
 
       <div class="head">
         <div class="head-row">
-          <div class="title">switch ${st.selectedKey} macro</div>
+          <span class="switch-tag">${st.selectedKey}</span>
+          ${canName
+            ? html`
+                <div class="strip-card" style="background:${stripBg}">
+                  <input
+                    class="name-input"
+                    style="color:${stripInk}"
+                    .value=${idNow.raw.name || ''}
+                    placeholder=${idNow.auto || 'name this stack'}
+                    maxlength="24"
+                    @input=${(e: InputEvent) => this.store.setIdent({ name: (e.target as HTMLInputElement).value })}
+                  />
+                  <input
+                    class="secondary-input"
+                    style="color:${stripInk}"
+                    .value=${idNow.secondary}
+                    placeholder=${idNow.autoSec || 'second line'}
+                    maxlength="24"
+                    @input=${(e: InputEvent) => this.store.setIdent({ secondary: (e.target as HTMLInputElement).value })}
+                  />
+                </div>
+                <button
+                  class="color-btn"
+                  title=${idNow.color ? `strip colour · ${idNow.color}` : 'give this stack a colour'}
+                  style="background:${idNow.color ? HEX[idNow.color] : 'repeating-linear-gradient(135deg,#fffbf0 0 4px,#e9e0cc 4px 8px)'}"
+                  @click=${() => this.store.toggleColorPicker()}
+                ></button>
+              `
+            : html`<div class="title">switch ${st.selectedKey} macro</div>`}
+
           <span class="capacity" style=${list.length >= MAX_STEPS ? 'background:var(--full-border-bg)' : 'background:transparent'}
             >${list.length} / ${MAX_STEPS}</span
           >
           <button class="chevron" @click=${() => this.store.toggleSheet()}>${open ? '⌄' : '⌃'}</button>
+
+          ${st.colorPickerOpen
+            ? html`
+                <div class="color-popover">
+                  <div class="color-pop-head">
+                    <span class="color-pop-title">switch ${st.selectedKey} lights up…</span>
+                    <button class="color-pop-close" @click=${() => this.store.closeColorPicker()}>×</button>
+                  </div>
+                  <div class="color-grid">
+                    ${PALETTE.map(([cName, hex]) => {
+                      const allowed = shared.length === 0 || shared.includes(cName);
+                      const on = idNow.color === cName;
+                      return html`
+                        <button
+                          class="color-swatch"
+                          title=${allowed ? cName : `${cName} — not in this rig's palette`}
+                          style="background:${hex}"
+                          ?active=${on}
+                          ?disabled=${!allowed}
+                          @click=${() => {
+                            this.store.setIdent({ color: on ? null : cName });
+                            this.store.closeColorPicker();
+                          }}
+                        ></button>
+                      `;
+                    })}
+                  </div>
+                  <div class="text-row">
+                    <span class="text-lbl">text</span>
+                    ${TEXTS.map(([tName, hex]) => {
+                      const on = idNow.textColor === tName;
+                      return html`
+                        <button
+                          class="text-opt"
+                          title=${`text in ${tName}${idNow.autoText ? ' — picked automatically until you choose' : ''}`}
+                          ?active=${on}
+                          @click=${() => this.store.setIdent({ textColor: tName })}
+                        >
+                          <span class="text-dot" style="background:${hex}"></span>
+                          <span>${tName}</span>
+                        </button>
+                      `;
+                    })}
+                  </div>
+                  <div class="color-pop-note">
+                    ${shared.length > 0
+                      ? `every device in the rig can light these. ${
+                          dimmed.length ? `${dimmed.join(', ')} ${dimmed.length === 1 ? 'is' : 'are'} out of range.` : ''
+                        }`
+                      : 'no device in this rig has a light — colour rides along on the label sheet only.'}
+                  </div>
+                </div>
+              `
+            : null}
         </div>
+
+        ${flags.length > 0
+          ? html`
+              <div class="flags-row">
+                ${flags.map(
+                  (f) => html`
+                    <button class="flag-btn" title="see how each device renders this" @click=${() => this.store.openSettings()}>
+                      <span class="flag-dot"></span>
+                      <span>${f}</span>
+                    </button>
+                  `,
+                )}
+              </div>
+            `
+          : null}
+
         <div class="tabs">
           ${ACTIONS.map(({ id, label }) => {
             const n = bank[st.selectedKey][id].length;

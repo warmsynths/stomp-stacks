@@ -1,10 +1,16 @@
-import type { ActionId } from '../data/controllers.js';
+import { ACTIONS, type ActionId } from '../data/controllers.js';
 import type { DeviceControl } from '../data/devices.js';
+import { NAMING, PALETTE, HEX, FALLBACK, isDark, type ColorName, type NamingTargetDef } from '../data/naming.js';
 import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
 import { MacroStackModel, DEFAULT_MAX_STEPS } from './macro-stack-model.js';
-import type { FaceMode, MacroStep, StompState } from './types.js';
+import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult } from './types.js';
 
 export const MAX_STEPS = DEFAULT_MAX_STEPS;
+
+function trunc(s: string, n: number): string {
+  if (!s) return '';
+  return s.length <= n ? s : s.slice(0, n);
+}
 
 function initialState(controllerId: string): StompState {
   const ctrl = HardwareRegistry.getController(controllerId);
@@ -25,9 +31,11 @@ function initialState(controllerId: string): StompState {
     addPedalOpen: false,
     confirmRemovePedal: null,
     channelPickerOpen: false,
+    colorPickerOpen: false,
     targetId: 'scribble',
     rig: ['blooper', 'mood', 'elcap'],
     channels: { blooper: 1, mood: 2, elcap: 3 },
+    naming: {},
     sheetOpen: false,
   };
 }
@@ -210,6 +218,96 @@ export class StompStore extends EventTarget {
     this.set({ sheetOpen: open });
   }
 
+  toggleColorPicker() {
+    this.set({ colorPickerOpen: !this.state.colorPickerOpen });
+  }
+
+  closeColorPicker() {
+    this.set({ colorPickerOpen: false });
+  }
+
+  namingTargets(): NamingTargetDef[] {
+    const ids = [this.state.controllerId];
+    if (this.state.brainId === 'scribble') ids.push('scribble');
+    return ids.filter((id) => NAMING[id]).map((id) => ({ ...NAMING[id] }));
+  }
+
+  displayTargets(): NamingTargetDef[] {
+    return this.namingTargets().filter((t) => t.name > 0);
+  }
+
+  sharedColors(): ColorName[] {
+    const lit = this.namingTargets().filter((t) => t.colors === null || t.colors.length > 0);
+    if (!lit.length) return [];
+    return PALETTE.map((p) => p[0]).filter((n) => lit.every((t) => t.colors === null || (t.colors && t.colors.includes(n))));
+  }
+
+  autoName(bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey): string {
+    const bank = this.state.banks[bankIndex]?.[switchKey];
+    if (!bank) return '';
+    let firstStep: MacroStep | null = null;
+    let n = 0;
+    ACTIONS.forEach((a) =>
+      bank[a.id].forEach((s: MacroStep) => {
+        n++;
+        if (!firstStep) firstStep = s;
+      }),
+    );
+    if (!firstStep) return '';
+    const step: MacroStep = firstStep;
+    const d = HardwareRegistry.getDevice(step.device);
+    if (!d) return '';
+    const c = HardwareRegistry.getControl(step.device, step.control);
+    const ceiling = this.displayTargets().reduce((m, t) => Math.min(m, t.name), 24);
+    return trunc(n > 1 ? `${d.name} +${n - 1}` : `${d.name} ${c ? c.short : ''}`, ceiling);
+  }
+
+  autoSecondary(bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey): string {
+    const bank = this.state.banks[bankIndex]?.[switchKey];
+    if (!bank) return '';
+    const parts: string[] = [];
+    ACTIONS.forEach((a) => {
+      if (bank[a.id].length) parts.push(`${bank[a.id].length} on ${a.label}`);
+    });
+    return parts.join(' · ');
+  }
+
+  ident(bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey): IdentResult {
+    const key = `${bankIndex}:${switchKey}`;
+    const n = this.state.naming[key] || {};
+    const auto = this.autoName(bankIndex, switchKey);
+    const autoSec = this.autoSecondary(bankIndex, switchKey);
+    const color = n.color || null;
+    const bg = color ? HEX[color] : '#16323d';
+    return {
+      name: n.name != null && n.name !== '' ? n.name : auto,
+      secondary: n.secondary || '',
+      color,
+      textColor: n.textColor || (isDark(bg) ? 'cream' : 'ink'),
+      autoText: !n.textColor,
+      raw: n,
+      auto,
+      autoSec,
+    };
+  }
+
+  setIdent(patch: Partial<PresetNaming>, bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey) {
+    const key = `${bankIndex}:${switchKey}`;
+    const naming = { ...this.state.naming, [key]: { ...this.state.naming[key], ...patch } };
+    this.set({ naming });
+  }
+
+  colorFor(targetId: string, colorName: ColorName | null): ColorName | null {
+    if (!colorName) return null;
+    const t = NAMING[targetId];
+    if (!t) return null;
+    if (t.colors === null) return colorName;
+    if (!t.colors.length) return null;
+    if (t.colors.includes(colorName)) return colorName;
+    const f = FALLBACK[colorName];
+    return f && t.colors.includes(f) ? f : t.colors[0];
+  }
+
   /** Switching controllers starts a fresh set of stacks. */
   switchController(id: string) {
     const ctrl = HardwareRegistry.getController(id);
@@ -220,6 +318,7 @@ export class StompStore extends EventTarget {
       selectedKey: ctrl.keys[0],
       controllerPickerOpen: false,
       popoverControlId: null,
+      colorPickerOpen: false,
     });
   }
 }

@@ -3,7 +3,7 @@ import { DEVICES, DEVICE_ORDER, valueOptionsFor, KNOB_VALUES } from '../devices.
 
 describe('Device Dictionary Data', () => {
   it('contains all required devices in DEVICE_ORDER', () => {
-    expect(DEVICE_ORDER).toEqual(['blooper', 'mood', 'elcap']);
+    expect(DEVICE_ORDER).toEqual(['blooper', 'mood', 'elcap', 'genloss']);
     DEVICE_ORDER.forEach((id) => {
       expect(DEVICES[id]).toBeDefined();
       expect(DEVICES[id].id).toBe(id);
@@ -94,6 +94,24 @@ describe('Device Dictionary Data', () => {
 
     expect(elcap.notes).toBeDefined();
     expect(elcap.notes!.some((n) => n.includes('BLUE'))).toBe(true);
+  });
+
+  it('maps official CC numbers for Generation Loss controls correctly', () => {
+    const genloss = DEVICES.genloss;
+    const findCc = (id: string) => genloss.controls.find((c) => c.id === id)?.cc;
+
+    expect(findCc('wow')).toBe(14);
+    expect(findCc('volume')).toBe(15);
+    expect(findCc('model')).toBe(16);
+    expect(findCc('flutter')).toBe(17);
+    expect(findCc('saturate')).toBe(18);
+    expect(findCc('failure')).toBe(19);
+    expect(findCc('aux')).toBe(21);
+    expect(findCc('dry')).toBe(22);
+    expect(findCc('noise')).toBe(23);
+    expect(findCc('preset')).toBe(101);
+    expect(findCc('auxSw')).toBe(103);
+    expect(findCc('bypass')).toBe(102);
   });
 
   it('returns default KNOB_VALUES for knobs without custom values option list', () => {
