@@ -2,7 +2,8 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { tokens, resetAndButton } from '../styles/shared.js';
-import { DEVICES, type Device, type DeviceControl } from '../data/devices.js';
+import { type Device, type DeviceControl } from '../data/devices.js';
+import { HardwareRegistry } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { MacroStep } from '../state/types.js';
@@ -114,7 +115,7 @@ export class PedalCanvas extends LitElement {
 
   render() {
     const st = this.store.state;
-    const device = DEVICES[st.browseDevice];
+    const device = HardwareRegistry.getDevice(st.browseDevice)!;
     const drawn = st.face === 'drawn';
     const list = this.store.activeStack;
 

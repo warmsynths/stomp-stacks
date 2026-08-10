@@ -1,9 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton } from '../styles/shared.js';
-import { CONTROLLERS } from '../data/controllers.js';
-import { BRAINS } from '../data/brains.js';
-import { DEVICES } from '../data/devices.js';
+import { HardwareRegistry } from '../data/registry.js';
 import { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
@@ -316,12 +314,12 @@ export class StompApp extends LitElement {
 
   private renderHeaderRig() {
     const st = this.store.state;
-    const ctrl = CONTROLLERS[st.controllerId];
-    const brain = BRAINS[st.brainId];
+    const ctrl = HardwareRegistry.getController(st.controllerId);
+    const brain = HardwareRegistry.getBrain(st.brainId);
     const pedalSummary =
       st.rig.length <= 2
-        ? st.rig.map((id) => DEVICES[id]?.name || id).join(', ')
-        : `${st.rig.slice(0, 2).map((id) => DEVICES[id]?.name || id).join(', ')} +${st.rig.length - 2}`;
+        ? st.rig.map((id) => HardwareRegistry.getDevice(id)?.name || id).join(', ')
+        : `${st.rig.slice(0, 2).map((id) => HardwareRegistry.getDevice(id)?.name || id).join(', ')} +${st.rig.length - 2}`;
 
     if (this.phone) {
       return html`

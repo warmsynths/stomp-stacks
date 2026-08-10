@@ -1,19 +1,11 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
-import { CONTROLLERS } from '../data/controllers.js';
-import { BRAINS } from '../data/brains.js';
-import { DEVICES } from '../data/devices.js';
+import { HardwareRegistry } from '../data/registry.js';
 import { TARGETS } from '../data/targets.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
-import {
-  buildPreview,
-  findIssues,
-  compileRigJson,
-  compileScribbleMacroJson,
-  compileMc3Json,
-} from '../compiler/midi.js';
+import { CompilerEngine } from '../compiler/midi.js';
 import { downloadJson, downloadText } from '../compiler/download.js';
 
 @customElement('compile-modal')
@@ -226,18 +218,12 @@ export class CompileModal extends LitElement {
 
   private handleDownload() {
     const st = this.store.state;
-    const target = st.targetId;
+    const compilation = CompilerEngine.compile(st);
 
-    if (target === 'rig') {
-      downloadJson('rig.json', compileRigJson(st));
-    } else if (target === 'scribble') {
-      downloadJson('scribble.json', compileScribbleMacroJson(st));
-    } else if (target === 'mc3') {
-      downloadJson('mc3-preset.json', compileMc3Json(st));
+    if (compilation.exportFile.mimeType === 'application/json') {
+      downloadJson(compilation.exportFile.filename, JSON.parse(compilation.exportFile.content));
     } else {
-      const lines = buildPreview(st).map((l) => l.text).join('\n');
-      const filename = target === 'labels' ? 'pedalboard-labels.txt' : 'midi-trace.log';
-      downloadText(filename, lines);
+      downloadText(compilation.exportFile.filename, compilation.exportFile.content);
     }
   }
 
@@ -246,14 +232,17 @@ export class CompileModal extends LitElement {
     if (!st.compileOpen) return null;
 
     const total = this.store.totalAssigned;
-    const ctrl = CONTROLLERS[st.controllerId];
-    const brain = BRAINS[st.brainId];
-    const pedalNames = st.rig.length ? st.rig.map((id) => DEVICES[id]?.name || id).join(', ') : 'no pedals yet';
+    const ctrl = HardwareRegistry.getController(st.controllerId);
+    const brain = HardwareRegistry.getBrain(st.brainId);
+    const pedalNames = st.rig.length
+      ? st.rig.map((id) => HardwareRegistry.getDevice(id)?.name || id).join(', ')
+      : 'no pedals yet';
     const compileMeta = `${total} ${total === 1 ? 'message' : 'messages'} · ${ctrl.short} → ${brain.short} → ${pedalNames}`;
 
-    const currentTargetDef = TARGETS.find((t) => t.id === st.targetId) || TARGETS[0];
-    const lines = buildPreview(st);
-    const issues = findIssues(st);
+    const currentTargetDef = HardwareRegistry.getTarget(st.targetId);
+    const compilation = CompilerEngine.compile(st);
+    const lines = compilation.preview;
+    const issues = compilation.diagnostics;
 
     return html`
       <div class="scrim" @click=${(e: Event) => e.target === e.currentTarget && this.store.closeCompile()}>

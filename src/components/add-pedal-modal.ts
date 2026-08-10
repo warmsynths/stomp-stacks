@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
-import { DEVICES, DEVICE_ORDER } from '../data/devices.js';
+import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
@@ -156,7 +156,7 @@ export class AddPedalModal extends LitElement {
           </div>
           <div class="body">
             ${availableIds.map((id) => {
-              const d = DEVICES[id];
+              const d = HardwareRegistry.getDevice(id)!;
               const nextCh = st.channels[id] || this.store.nextFreeChannel(st.rig, st.channels);
               return html`
                 <button class="tile" @click=${() => this.store.addPedal(id)}>

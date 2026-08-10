@@ -1,29 +1,19 @@
-import { CONTROLLERS, type ActionId } from '../data/controllers.js';
-import { DEVICE_ORDER, type DeviceControl } from '../data/devices.js';
-import type { Bank, FaceMode, MacroStep, StompState } from './types.js';
+import type { ActionId } from '../data/controllers.js';
+import type { DeviceControl } from '../data/devices.js';
+import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
+import { MacroStackModel, DEFAULT_MAX_STEPS } from './macro-stack-model.js';
+import type { FaceMode, MacroStep, StompState } from './types.js';
 
-export const MAX_STEPS = 8;
-
-function newBanks(controllerId: string): Bank[] {
-  const def = CONTROLLERS[controllerId];
-  const out: Bank[] = [];
-  for (let i = 0; i < def.banks; i++) {
-    const bank: Bank = {};
-    def.keys.forEach((k) => {
-      bank[k] = { press: [], hold: [], double: [] };
-    });
-    out.push(bank);
-  }
-  return out;
-}
+export const MAX_STEPS = DEFAULT_MAX_STEPS;
 
 function initialState(controllerId: string): StompState {
+  const ctrl = HardwareRegistry.getController(controllerId);
   return {
     controllerId,
     brainId: 'scribble',
-    banks: newBanks(controllerId),
+    banks: MacroStackModel.createBanks(controllerId),
     bank: 0,
-    selectedKey: CONTROLLERS[controllerId].keys[0],
+    selectedKey: ctrl.keys[0],
     action: 'press',
     browseDevice: DEVICE_ORDER[0],
     face: 'photo',
@@ -43,8 +33,8 @@ function initialState(controllerId: string): StompState {
 }
 
 /**
- * Central reactive store for the app. Plain EventTarget so it has zero
- * framework dependency; components observe it via StoreController.
+ * Central reactive UI store for the app.
+ * Acts as a thin reactive binding layer over MacroStackModel & HardwareRegistry.
  */
 export class StompStore extends EventTarget {
   state: StompState = initialState('chocolate');
@@ -54,46 +44,17 @@ export class StompStore extends EventTarget {
     this.dispatchEvent(new Event('change'));
   }
 
-  private mutateStack(fn: (list: MacroStep[]) => void) {
-    const banks = this.state.banks.map((bank) => {
-      const next: Bank = {};
-      for (const key of Object.keys(bank)) {
-        next[key] = {
-          press: bank[key].press.slice(),
-          hold: bank[key].hold.slice(),
-          double: bank[key].double.slice(),
-        };
-      }
-      return next;
-    });
-    fn(banks[this.state.bank][this.state.selectedKey][this.state.action]);
-    this.set({ banks });
-  }
-
   get activeStack(): MacroStep[] {
     const { banks, bank, selectedKey, action } = this.state;
-    return banks[bank][selectedKey][action];
+    return MacroStackModel.getActiveStack(banks, bank, selectedKey, action);
   }
 
   get totalAssigned(): number {
-    let total = 0;
-    for (const bank of this.state.banks) {
-      for (const key of Object.keys(bank)) {
-        total += bank[key].press.length + bank[key].hold.length + bank[key].double.length;
-      }
-    }
-    return total;
+    return MacroStackModel.countTotalAssignedSteps(this.state.banks);
   }
 
   nextFreeChannel(rig: string[] = this.state.rig, channels: Record<string, number> = this.state.channels): number {
-    const taken: Record<number, boolean> = {};
-    rig.forEach((id) => {
-      if (channels[id]) taken[channels[id]] = true;
-    });
-    for (let n = 1; n <= 16; n++) {
-      if (!taken[n]) return n;
-    }
-    return 1;
+    return HardwareRegistry.findNextFreeChannel(rig, channels);
   }
 
   addPedal(id: string) {
@@ -104,7 +65,7 @@ export class StompStore extends EventTarget {
     const rig = [...this.state.rig, id];
     const channels = { ...this.state.channels };
     if (!channels[id]) {
-      channels[id] = this.nextFreeChannel(rig.filter((x) => x !== id), channels);
+      channels[id] = HardwareRegistry.findNextFreeChannel(rig.filter((x) => x !== id), channels);
     }
     this.set({ rig, channels, browseDevice: id, addPedalOpen: false, popoverControlId: null });
   }
@@ -167,31 +128,30 @@ export class StompStore extends EventTarget {
 
   /** Toggles the step off if it's already assigned; otherwise appends (capped at MAX_STEPS). */
   addStep(controlId: string, value: number | null) {
-    const device = this.state.browseDevice;
-    this.mutateStack((list) => {
-      const at = list.findIndex((s) => s.device === device && s.control === controlId && s.value === value);
-      if (at >= 0) {
-        list.splice(at, 1);
-        return;
-      }
-      if (list.length >= MAX_STEPS) return;
-      list.push({ device, control: controlId, value });
-    });
-    this.set({ popoverControlId: null, sheetOpen: true });
+    const { banks, bank, selectedKey, action, browseDevice } = this.state;
+    const updatedBanks = MacroStackModel.addOrToggleStep(
+      banks,
+      bank,
+      selectedKey,
+      action,
+      browseDevice,
+      controlId,
+      value,
+      MAX_STEPS,
+    );
+    this.set({ banks: updatedBanks, popoverControlId: null, sheetOpen: true });
   }
 
   removeStep(index: number) {
-    this.mutateStack((list) => list.splice(index, 1));
+    const { banks, bank, selectedKey, action } = this.state;
+    const updatedBanks = MacroStackModel.removeStep(banks, bank, selectedKey, action, index);
+    this.set({ banks: updatedBanks });
   }
 
   moveStep(index: number, dir: -1 | 1) {
-    this.mutateStack((list) => {
-      const j = index + dir;
-      if (j < 0 || j >= list.length) return;
-      const tmp = list[index];
-      list[index] = list[j];
-      list[j] = tmp;
-    });
+    const { banks, bank, selectedKey, action } = this.state;
+    const updatedBanks = MacroStackModel.moveStep(banks, bank, selectedKey, action, index, dir);
+    this.set({ banks: updatedBanks });
   }
 
   selectSwitch(key: string) {
@@ -250,14 +210,14 @@ export class StompStore extends EventTarget {
     this.set({ sheetOpen: open });
   }
 
-  /** Switching controllers starts a fresh set of stacks — the picker warns about this up front. */
+  /** Switching controllers starts a fresh set of stacks. */
   switchController(id: string) {
-    const def = CONTROLLERS[id];
+    const ctrl = HardwareRegistry.getController(id);
     this.set({
       controllerId: id,
-      banks: newBanks(id),
+      banks: MacroStackModel.createBanks(id),
       bank: 0,
-      selectedKey: def.keys[0],
+      selectedKey: ctrl.keys[0],
       controllerPickerOpen: false,
       popoverControlId: null,
     });

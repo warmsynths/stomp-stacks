@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
 import { ACTIONS } from '../data/controllers.js';
-import { DEVICES, valueOptionsFor } from '../data/devices.js';
+import { HardwareRegistry } from '../data/registry.js';
 import { MAX_STEPS } from '../state/store.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
@@ -370,8 +370,8 @@ export class MacroPanel extends LitElement {
       this.style.maxHeight = '';
     }
 
-    const popDevice = DEVICES[st.browseDevice];
-    const popControl = st.popoverControlId ? popDevice.controls.find((c) => c.id === st.popoverControlId) : null;
+    const popDevice = HardwareRegistry.getDevice(st.browseDevice);
+    const popControl = st.popoverControlId ? HardwareRegistry.getControl(st.browseDevice, st.popoverControlId) : null;
 
     return html`
       <button class="grabber" @click=${() => this.store.toggleSheet()}></button>
@@ -404,7 +404,7 @@ export class MacroPanel extends LitElement {
         </div>
       </div>
 
-      ${popControl
+      ${popControl && popDevice
         ? html`
             <div class="popover">
               <div class="popover-head">
@@ -413,7 +413,7 @@ export class MacroPanel extends LitElement {
                 <button class="pop-close" @click=${() => this.store.closePopover()}>×</button>
               </div>
               <div class="pop-options">
-                ${valueOptionsFor(popControl).map((opt) => {
+                ${HardwareRegistry.valueOptionsFor(popControl).map((opt) => {
                   const on = list.some((s) => s.device === st.browseDevice && s.control === popControl.id && s.value === opt.value);
                   return html`
                     <button

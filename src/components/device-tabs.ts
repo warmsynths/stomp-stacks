@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
-import { DEVICES } from '../data/devices.js';
+import { HardwareRegistry } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
@@ -183,14 +183,14 @@ export class DeviceTabs extends LitElement {
   render() {
     const st = this.store.state;
     const active = st.browseDevice;
-    const currentDevice = DEVICES[active];
+    const currentDevice = HardwareRegistry.getDevice(active);
     const currentChannel = st.channels[active] || (currentDevice ? currentDevice.midiChannel : 1);
 
     return html`
       <div class="wrap">
         <div class="row">
           ${st.rig.map((id) => {
-            const d = DEVICES[id];
+            const d = HardwareRegistry.getDevice(id);
             if (!d) return null;
             const on = active === id;
             return html`

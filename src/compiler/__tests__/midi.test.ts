@@ -9,10 +9,12 @@ import {
   compileHardwareScribbleConfig,
   findIssues,
   buildPreview,
+  CompilerEngine,
+  compile,
 } from '../midi.js';
 import type { StompState } from '../../state/types.js';
 
-describe('MIDI Compiler Logic', () => {
+describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
   it('correctly calculates MIDI statusByte and CC for steps', () => {
     // Blooper on channel 3, volume control CC 14
     const desc = describeStep({ device: 'blooper', control: 'volume', value: 64 });
@@ -137,5 +139,19 @@ describe('MIDI Compiler Logic', () => {
     const state = createTestState();
     const preview = buildPreview(state);
     expect(preview.length).toBeGreaterThan(0);
+  });
+
+  it('compiles cleanly through unified CompilerEngine seam', () => {
+    const state = createTestState();
+    const result = CompilerEngine.compile(state, 'scribble');
+    expect(result.targetId).toBe('scribble');
+    expect(result.exportFile.filename).toBe('scribble-macro-chocolate.json');
+    expect(result.exportFile.mimeType).toBe('application/json');
+    expect(result.preview.length).toBeGreaterThan(0);
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+
+    const rigResult = compile(state, 'rig');
+    expect(rigResult.targetId).toBe('rig');
+    expect(rigResult.exportFile.filename).toBe('rig-stack-chocolate.json');
   });
 });
