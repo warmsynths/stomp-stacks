@@ -145,8 +145,12 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
     const state = createTestState();
     const result = CompilerEngine.compile(state, 'scribble');
     expect(result.targetId).toBe('scribble');
-    expect(result.exportFile.filename).toBe('scribble-macro-chocolate.json');
+    expect(result.exportFile.filename).toBe('scribble.json');
     expect(result.exportFile.mimeType).toBe('application/json');
+    const parsed = JSON.parse(result.exportFile.content);
+    expect(parsed.deviceSettings).toBeDefined();
+    expect(parsed.globalSettings).toBeDefined();
+    expect(parsed.presetSettings).toHaveLength(128);
     expect(result.preview.length).toBeGreaterThan(0);
     expect(result.diagnostics.length).toBeGreaterThan(0);
 

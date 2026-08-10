@@ -140,7 +140,7 @@ export const scribbleJsonSchema = {
     },
     globalSettings: {
       type: 'object',
-      required: ['deviceName', 'currentBank', 'lightMode', 'mainColour', 'textColour', 'displayBrightness', 'midiChannel', 'globalBpm', 'switches', 'presetSettings'],
+      required: ['deviceName', 'currentBank', 'lightMode', 'mainColour', 'textColour', 'displayBrightness', 'midiChannel', 'globalBpm', 'switches', 'customMessages'],
       properties: {
         deviceName: { type: 'string' },
         currentBank: { type: 'integer', minimum: 0, maximum: 127 },

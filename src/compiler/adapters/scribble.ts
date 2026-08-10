@@ -101,7 +101,7 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
     }
 
     presetSettings.push({
-      bankId: 0,
+      bankId: i,
       bankName,
       secondaryText,
       colourOverride: messages.length > 0,
@@ -181,16 +181,16 @@ export class ScribbleTargetAdapter implements TargetAdapter {
   name = 'Pirate MIDI Scribble';
 
   compileExport(state: StompState): TargetExportFile {
-    const json = compileScribbleMacroJson(state);
+    const json = compileHardwareScribbleConfig(state);
     return {
-      filename: `scribble-macro-${state.controllerId}.json`,
+      filename: 'scribble.json',
       mimeType: 'application/json',
       content: JSON.stringify(json, null, 2),
     };
   }
 
   compilePreview(state: StompState): CompileLine[] {
-    const json = compileScribbleMacroJson(state);
+    const json = compileHardwareScribbleConfig(state);
     return JSON.stringify(json, null, 2)
       .split('\n')
       .map((line) => ({ text: line || ' ' }));
