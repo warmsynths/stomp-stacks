@@ -48,6 +48,20 @@ export interface ReadRow {
   pick: 'app' | 'device';
 }
 
+export interface ReadPresetDestination {
+  key: string;
+  action: ActionId;
+  mode: 'replace' | 'add';
+}
+
+export interface ReadPresetSlot {
+  n: number;
+  label: string;
+  second: string;
+  color: ColorName | null;
+  steps: MacroStep[];
+}
+
 export interface ParsedPresetItem {
   id: string;
   bankIndex: number;
@@ -60,8 +74,15 @@ export interface ParsedPresetItem {
 
 export interface ReadModalData {
   from: string;
-  allPresets: ParsedPresetItem[];
+  presets: ReadPresetSlot[];
+  dest: Record<number, ReadPresetDestination>;
+  filter: string;
+  allPresets?: ParsedPresetItem[];
   readingHardware?: boolean;
+  scanned?: number;
+  total?: number;
+  found?: number;
+  rows?: ReadRow[];
 }
 
 

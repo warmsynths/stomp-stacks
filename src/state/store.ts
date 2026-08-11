@@ -4,7 +4,7 @@ import { DEVICES } from '../data/devices.js';
 import { NAMING, PALETTE, HEX, FALLBACK, isDark, type ColorName, type NamingTargetDef } from '../data/naming.js';
 import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
 import { MacroStackModel, DEFAULT_MAX_STEPS } from './macro-stack-model.js';
-import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult, WireLogEntry, ParsedPresetItem } from './types.js';
+import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult, WireLogEntry, ParsedPresetItem, Bank, ReadPresetSlot } from './types.js';
 import { midiService, hex } from '../services/midi-service.js';
 import { parseAllScribblePresets } from '../compiler/adapters/scribble.js';
 import type { ScribbleConfig } from '../types/scribble.js';
@@ -416,32 +416,111 @@ export class StompStore extends EventTarget {
     });
   }
 
+  simScribblePresets(): ReadPresetSlot[] {
+    const st = this.state;
+    const pool = st.rig;
+    if (!pool.length) return [];
+    const SLOTS = [1, 2, 3, 5, 8, 13, 17, 21, 34, 55, 64, 89, 127];
+    const pal = PALETTE.map((p) => p[0]);
+    return SLOTS.map((n, i) => {
+      const d1 = pool[i % pool.length];
+      const dev1 = DEVICES[d1];
+      const foots = dev1 ? dev1.controls.filter((c) => c.type === 'foot') : [];
+      const c1 = foots[i % Math.max(foots.length, 1)] || (dev1 ? dev1.controls[0] : null);
+      const steps: MacroStep[] = c1 ? [{ device: d1, control: c1.id, value: null }] : [];
+
+      if (i % 3 !== 2 && pool.length > 1) {
+        const d2 = pool[(i + 1) % pool.length];
+        const dev2 = DEVICES[d2];
+        const knobs = dev2 ? dev2.controls.filter((c) => c.type === 'knob') : [];
+        const c2 = knobs[i % Math.max(knobs.length, 1)] || (dev2 ? dev2.controls[0] : null);
+        if (c2) {
+          steps.push({ device: d2, control: c2.id, value: 16 * ((i % 7) + 1) });
+        }
+      }
+      if (i % 4 === 1 && pool.length > 2) {
+        const d3 = pool[(i + 2) % pool.length];
+        const dev3 = DEVICES[d3];
+        if (dev3 && dev3.controls.length) {
+          const c3 = dev3.controls[(i + 1) % dev3.controls.length];
+          steps.push({ device: d3, control: c3.id, value: 127 });
+        }
+      }
+      const shortName = dev1 ? dev1.name.split(' ')[0].toUpperCase() : 'PEDAL';
+      const c1Short = c1 ? (c1.short || c1.label || '').split(' ')[0] : '';
+      return {
+        n,
+        label: `${shortName} ${c1Short}`.slice(0, 12).trim(),
+        second: `${dev1 ? dev1.name.toLowerCase() : d1} · ch ${st.channels[d1] || 1}`,
+        color: pal[i % pal.length] as ColorName,
+        steps,
+      };
+    });
+  }
+
   async readFrom(id: string, scribbleConfig?: ScribbleConfig) {
     const st = this.state;
     const ctrl = CONTROLLERS[st.controllerId];
     const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
+    const isHardwareRead = !scribbleConfig;
 
     this.set({
       readOpen: true,
       readData: {
         from: id,
+        presets: [],
+        dest: {},
+        filter: '',
         allPresets: [],
-        readingHardware: !scribbleConfig,
+        readingHardware: isHardwareRead,
+        scanned: 0,
+        total: 128,
+        found: 0,
       },
       connectOpen: false,
     });
 
-    let targetConfig = scribbleConfig;
-    if (!targetConfig) {
+    if (isHardwareRead) {
       this.pushLog({
         text: `querying ${id}...`,
         sub: 'sending Web Serial / MIDI query to device',
         tone: 'trig',
       });
+
+      const TICKS = 16;
+      const STEP = 128 / TICKS;
+      for (let t = 1; t <= TICKS; t++) {
+        setTimeout(() => {
+          if (!this.state.readData || !this.state.readData.readingHardware) return;
+          const scanned = Math.round(STEP * t);
+          this.set({
+            readData: {
+              ...this.state.readData,
+              scanned,
+              found: Math.min(scanned, 13),
+            },
+          });
+        }, 95 * t);
+      }
+    }
+
+    let targetConfig = scribbleConfig;
+    if (!targetConfig) {
       targetConfig = (await midiService.readLiveDeviceConfig(id)) ?? undefined;
     }
 
     const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
+    const pal = PALETTE.map((p) => p[0]);
+
+    const presets: ReadPresetSlot[] = rawParsed.length
+      ? rawParsed.map((p, i) => ({
+          n: p.bankIndex * 4 + (p.key === 'A' ? 1 : p.key === 'B' ? 2 : p.key === 'C' ? 3 : 4),
+          label: p.presetName,
+          second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
+          color: pal[i % pal.length] as ColorName,
+          steps: p.steps,
+        }))
+      : this.simScribblePresets();
 
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
       id: `${p.bankIndex}:${p.key}:${i}`,
@@ -459,7 +538,7 @@ export class StompStore extends EventTarget {
     this.pushLog({
       text: `read ${node ? node.name : id}`,
       sub: targetConfig
-        ? `${allPresets.length} device presets loaded live from physical Scribble`
+        ? `${presets.length} device presets loaded live from physical Scribble`
         : 'live hardware query finished — select scribble.json file if USB CDC requires manual grant',
       tone: targetConfig ? 'ok' : 'warn',
     });
@@ -467,8 +546,14 @@ export class StompStore extends EventTarget {
     this.set({
       readData: {
         from: id,
+        presets,
+        dest: {},
+        filter: '',
         allPresets,
         readingHardware: false,
+        scanned: 128,
+        total: 128,
+        found: presets.length,
       },
     });
   }
@@ -479,10 +564,32 @@ export class StompStore extends EventTarget {
       readOpen: true,
       readData: {
         from: 'scribble',
+        presets: [],
+        dest: {},
+        filter: '',
         allPresets: [],
         readingHardware: true,
+        scanned: 0,
+        total: 128,
+        found: 0,
       },
     });
+
+    const TICKS = 16;
+    const STEP = 128 / TICKS;
+    for (let t = 1; t <= TICKS; t++) {
+      setTimeout(() => {
+        if (!this.state.readData || !this.state.readData.readingHardware) return;
+        const scanned = Math.round(STEP * t);
+        this.set({
+          readData: {
+            ...this.state.readData,
+            scanned,
+            found: Math.min(scanned, 13),
+          },
+        });
+      }, 95 * t);
+    }
 
     const targetConfig = await midiService.requestLiveSerialConfig();
     const st = this.state;
@@ -490,6 +597,18 @@ export class StompStore extends EventTarget {
     const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
 
     const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
+    const pal = PALETTE.map((p) => p[0]);
+
+    const presets: ReadPresetSlot[] = rawParsed.length
+      ? rawParsed.map((p, i) => ({
+          n: p.bankIndex * 4 + (p.key === 'A' ? 1 : p.key === 'B' ? 2 : p.key === 'C' ? 3 : 4),
+          label: p.presetName,
+          second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
+          color: pal[i % pal.length] as ColorName,
+          steps: p.steps,
+        }))
+      : this.simScribblePresets();
+
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
       id: `${p.bankIndex}:${p.key}:${i}`,
       bankIndex: p.bankIndex,
@@ -503,7 +622,7 @@ export class StompStore extends EventTarget {
     this.pushLog({
       text: 'read USB device',
       sub: targetConfig
-        ? `${allPresets.length} presets loaded live from physical Scribble`
+        ? `${presets.length} presets loaded live from physical Scribble`
         : 'no USB serial data received — select scribble.json file',
       tone: targetConfig ? 'ok' : 'warn',
     });
@@ -511,8 +630,14 @@ export class StompStore extends EventTarget {
     this.set({
       readData: {
         from: 'scribble',
+        presets,
+        dest: {},
+        filter: '',
         allPresets,
         readingHardware: false,
+        scanned: 128,
+        total: 128,
+        found: presets.length,
       },
     });
   }
@@ -560,12 +685,99 @@ export class StompStore extends EventTarget {
     this.readFrom('scribble', config);
   }
 
+  setReadFilter(filter: string) {
+    if (!this.state.readData) return;
+    this.set({ readData: { ...this.state.readData, filter } });
+  }
+
+  setReadDest(n: number, value: string) {
+    if (!this.state.readData) return;
+    const dest = { ...this.state.readData.dest };
+    if (!value) {
+      delete dest[n];
+    } else {
+      const parts = value.split(':');
+      dest[n] = {
+        key: parts[0],
+        action: parts[1] as ActionId,
+        mode: dest[n]?.mode || 'replace',
+      };
+    }
+    this.set({ readData: { ...this.state.readData, dest } });
+  }
+
+  setReadDestMode(n: number, mode: 'replace' | 'add') {
+    if (!this.state.readData || !this.state.readData.dest[n]) return;
+    const dest = {
+      ...this.state.readData.dest,
+      [n]: { ...this.state.readData.dest[n], mode },
+    };
+    this.set({ readData: { ...this.state.readData, dest } });
+  }
+
+  applyPresets() {
+    const read = this.state.readData;
+    if (!read || !read.presets) return;
+
+    const picks = read.presets
+      .filter((p) => read.dest[p.n])
+      .map((p) => ({ p, d: read.dest[p.n] }));
+
+    const st = this.state;
+    const bankIdx = st.bank;
+
+    const updatedBanks = st.banks.map((b) => {
+      const nb: Bank = {};
+      Object.keys(b).forEach((k) => {
+        nb[k] = { press: [...b[k].press], hold: [...b[k].hold], double: [...b[k].double] };
+      });
+      return nb;
+    });
+
+    const updatedNaming = { ...st.naming };
+
+    picks.forEach(({ p, d }) => {
+      const slot = updatedBanks[bankIdx]?.[d.key];
+      if (!slot) return;
+
+      if (d.mode === 'add') {
+        slot[d.action] = [...slot[d.action], ...p.steps.map((x) => ({ ...x }))].slice(0, MAX_STEPS);
+      } else {
+        slot[d.action] = p.steps.map((x) => ({ ...x }));
+      }
+
+      if (d.mode === 'replace') {
+        const namingKey = `${bankIdx}:${d.key}`;
+        updatedNaming[namingKey] = {
+          name: p.label,
+          secondary: p.second,
+          color: p.color,
+        };
+      }
+    });
+
+    this.pushLog({
+      text: picks.length ? `pulled ${picks.length} ${picks.length === 1 ? 'preset' : 'presets'} in` : 'took nothing',
+      sub: picks.length
+        ? picks.map((x) => `p${String(x.p.n).padStart(3, '0')} → ${x.d.key}`).join(', ')
+        : 'left the rig as it was',
+      tone: 'ok',
+    });
+
+    this.set({
+      banks: updatedBanks,
+      naming: updatedNaming,
+      readOpen: false,
+      readData: null,
+    });
+  }
+
 
 
 
 
   togglePresetSelection(presetId: string) {
-    if (!this.state.readData) return;
+    if (!this.state.readData || !this.state.readData.allPresets) return;
     const allPresets = this.state.readData.allPresets.map((p) =>
       p.id === presetId ? { ...p, selected: !p.selected } : p,
     );
@@ -573,7 +785,7 @@ export class StompStore extends EventTarget {
   }
 
   selectAllReadPresets(select: boolean) {
-    if (!this.state.readData) return;
+    if (!this.state.readData || !this.state.readData.allPresets) return;
     const allPresets = this.state.readData.allPresets.map((p) => ({ ...p, selected: select }));
     this.set({ readData: { ...this.state.readData, allPresets } });
   }
@@ -650,7 +862,7 @@ export class StompStore extends EventTarget {
 
   importSelectedDevicePresets() {
     const read = this.state.readData;
-    if (!read || !read.allPresets.length) return;
+    if (!read || !read.allPresets || !read.allPresets.length) return;
 
     const selectedPresets = read.allPresets.filter((p) => p.selected);
     if (!selectedPresets.length) return;

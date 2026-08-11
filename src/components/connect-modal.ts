@@ -3,7 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, modalScrim, motionKeyframes } from '../styles/shared.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
-import { midiService, hex } from '../services/midi-service.js';
+import { midiService } from '../services/midi-service.js';
 import { DEVICES } from '../data/devices.js';
 
 @customElement('connect-modal')
@@ -60,20 +60,24 @@ export class ConnectModal extends LitElement {
       .dev-row {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        border-bottom: 2px solid rgba(22, 50, 61, 0.15);
+        gap: 11px;
+        padding: 13px 14px;
+        border-bottom: 2px solid var(--ink);
         background: var(--paper);
+      }
+      .dev-row:nth-child(even) {
+        background: var(--card);
       }
       .dev-row:last-child {
         border-bottom: 0;
       }
       .dev-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        border: 2px solid var(--ink);
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        border: 2.5px solid var(--ink);
         flex: none;
+        transition: background 200ms ease;
       }
       .dev-info {
         flex: 1;
@@ -90,62 +94,96 @@ export class ConnectModal extends LitElement {
       }
       .dev-kind {
         font-family: var(--mono);
-        font-size: 9.5px;
-        padding: 1px 6px;
-        border-radius: 8px;
-        background: rgba(22, 50, 61, 0.08);
-        border: 1px solid rgba(22, 50, 61, 0.2);
+        font-size: 9px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        opacity: 0.45;
       }
       .dev-port {
+        display: block;
         font-family: var(--mono);
         font-size: 10.5px;
-        opacity: 0.55;
-        display: block;
-        margin-top: 1px;
+        margin-top: 2px;
+        opacity: 0.6;
       }
       .btn-action {
-        padding: 5px 12px;
+        flex: none;
+        padding: 6px 12px;
         border-radius: 14px;
         border: 2px solid var(--ink);
-        font-size: 12px;
-        font-weight: 600;
         background: var(--card);
+        font-size: 12.5px;
+        font-weight: 600;
         transition: background 150ms ease;
       }
       .btn-action:hover {
         background: var(--mustard);
       }
       .btn-listen {
-        padding: 5px 12px;
+        flex: none;
+        padding: 6px 12px;
         border-radius: 14px;
         border: 2px solid var(--ink);
-        font-size: 12px;
+        background: var(--card);
+        font-size: 12.5px;
         font-weight: 600;
-        background: var(--sky);
         transition: background 150ms ease;
       }
+      .btn-listen[listening] {
+        background: var(--mustard);
+        animation: breathe 1.4s ease-in-out infinite;
+      }
+      .btn-listen:hover {
+        background: var(--mustard);
+      }
       .btn-toggle {
-        padding: 5px 12px;
+        flex: none;
+        padding: 6px 13px;
         border-radius: 14px;
         border: 2px solid var(--ink);
-        font-family: var(--mono);
-        font-size: 11px;
+        font-size: 12.5px;
         font-weight: 600;
+        background: var(--ink);
+        color: var(--panel-warm);
+        transition:
+          background 150ms ease,
+          opacity 150ms ease;
+      }
+      .btn-toggle[on] {
+        background: transparent;
+        color: var(--ink);
+        opacity: 0.55;
       }
       .heard-card {
-        padding: 14px 16px;
-        border-radius: 18px;
+        margin-top: 14px;
+        padding: 14px 15px;
+        border-radius: 20px;
         border: 2.5px solid var(--ink);
-        background: #e8f4fa;
-        animation: sheetIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
+        background: #ffe6dd;
+        animation: sheetIn 190ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .heard-card[ok] {
+        background: #e7f5e7;
       }
       .heard-head {
         display: flex;
         align-items: center;
         gap: 9px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
+      }
+      .heard-dot {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        border-radius: 4px;
+        border: 2px solid var(--ink);
+        background: #ef7d5c;
+      }
+      .heard-card[ok] .heard-dot {
+        background: #5bb85b;
       }
       .heard-title {
+        flex: 1;
         font-size: 13.5px;
         font-weight: 600;
       }
@@ -169,49 +207,65 @@ export class ConnectModal extends LitElement {
         font-size: 13px;
         font-weight: 600;
       }
+      .btn-accept:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--ink);
+      }
       .btn-dismiss {
         padding: 8px 14px;
         border-radius: 16px;
         font-size: 13px;
         opacity: 0.6;
       }
+      .btn-dismiss:hover {
+        opacity: 1;
+      }
       .monitor-row {
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 14px 16px;
-        border-radius: 18px;
+        margin-top: 16px;
+        padding: 13px 15px;
+        border-radius: 20px;
         border: 2.5px solid var(--ink);
-        background: var(--paper);
+        background: var(--card);
+      }
+      .monitor-row[active] {
+        background: var(--panel-warm);
       }
       .toggle-switch {
-        width: 44px;
-        height: 24px;
-        border-radius: 12px;
-        border: 2.5px solid var(--ink);
         position: relative;
+        width: 52px;
+        height: 30px;
+        flex: none;
+        border-radius: 16px;
+        border: 2.5px solid var(--ink);
+        background: rgba(22, 50, 61, 0.12);
         cursor: pointer;
         transition: background 200ms ease;
       }
       .toggle-knob {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--ink);
         position: absolute;
-        top: 2.5px;
-        transition: transform 200ms ease;
+        top: 2px;
+        left: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--card);
+        border: 2px solid var(--ink);
+        transition: left 220ms cubic-bezier(0.32, 0.72, 0, 1);
       }
       .toggle-switch[active] {
-        background: var(--mustard);
+        background: #5bb85b;
       }
       .toggle-switch[active] .toggle-knob {
-        transform: translateX(20px);
+        left: 24px;
       }
       .foot {
         flex: none;
         display: flex;
         justify-content: flex-end;
+        align-items: center;
         padding: 16px 24px;
         border-top: 2.5px solid var(--ink);
         background: var(--card);
@@ -266,15 +320,15 @@ export class ConnectModal extends LitElement {
     if (el) el.click();
   }
 
-
-
   render() {
     const st = this.store.state;
     if (!st.connectOpen) return null;
 
     const nodes = midiService.getHardwareNodes(st);
     const connCount = nodes.filter((n) => st.conn[n.id]).length;
-    const connectMeta = `${connCount} connected · ${nodes.length} available ports`;
+    const connectMeta = connCount
+      ? `${connCount} ${connCount === 1 ? 'device is' : 'devices are'} answering. reading pulls what's on the box; listening watches what it sends.`
+      : "nothing is answering yet. open a port and the rig above stops being a diagram.";
 
     return html`
       <div class="scrim" @click=${(e: Event) => e.target === e.currentTarget && this.store.closeConnect()}>
@@ -295,7 +349,7 @@ export class ConnectModal extends LitElement {
               ${nodes.map((r) => {
                 const on = !!st.conn[r.id];
                 const listening = st.listening === r.id;
-                const dotBg = listening ? 'var(--sky)' : on ? '#5bb85b' : 'rgba(22,50,61,.3)';
+                const dotBg = on ? (r.id === 'scribble' ? '#8fd0e6' : DEVICES[r.id]?.accent || '#8fd0e6') : 'transparent';
                 return html`
                   <div class="dev-row">
                     <span class="dev-dot" style="background:${dotBg}"></span>
@@ -304,61 +358,77 @@ export class ConnectModal extends LitElement {
                         <span class="dev-name">${r.name}</span>
                         <span class="dev-kind">${r.kind}</span>
                       </div>
-                      <span class="dev-port">${r.port}</span>
+                      <span class="dev-port" style="opacity:${on ? '0.6' : '0.35'}">${on ? r.port : 'not open'}</span>
                     </div>
-                    ${r.id === 'scribble'
+                    ${r.canRead
                       ? html`
-                          <button
-                            class="btn-action"
-                            style="background:${on ? '#e1f4e1' : 'var(--mustard)'};"
-                            @click=${() => this.store.connectAndImportScribble()}
-                          >
-                            ${on ? '✓ Synced' : 'Connect & Sync'}
+                          <button class="btn-action" @click=${() => this.store.readFrom(r.id)}>
+                            read
                           </button>
                         `
-                      : html`
+                      : null}
+                    ${r.canListen
+                      ? html`
                           <button
-                            class="btn-toggle"
-                            style="background:${on ? '#ffe6dd' : 'transparent'};opacity:${on ? 1 : 0.6}"
-                            @click=${() => this.store.toggleConn(r.id)}
+                            class="btn-listen"
+                            ?listening=${listening}
+                            @click=${() => this.store.listenTo(r.id)}
                           >
-                            ${on ? 'Disconnect' : 'Connect'}
+                            ${listening ? 'listening…' : 'listen'}
                           </button>
-                        `}
-
+                        `
+                      : null}
+                    <button
+                      class="btn-toggle"
+                      ?on=${on}
+                      @click=${() => this.store.toggleConn(r.id)}
+                    >
+                      ${on ? 'drop' : 'connect'}
+                    </button>
                   </div>
                 `;
               })}
             </div>
 
-
             ${st.heard
               ? html`
-                  <div class="heard-card">
+                  <div class="heard-card" ?ok=${!st.heard.drift}>
                     <div class="heard-head">
-                      <span class="dev-dot" style="background:var(--sky)"></span>
-                      <span class="heard-title">heard on the wire</span>
+                      <span class="heard-dot"></span>
+                      <span class="heard-title">
+                        ${st.heard.drift
+                          ? "that isn't where we expected it"
+                          : `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} answers where we thought`}
+                      </span>
                     </div>
                     <div class="heard-body">
-                      ${DEVICES[st.heard.pedal]?.name || st.heard.pedal} sent ${hex(st.heard.cc)} when you moved
-                      ${DEVICES[st.heard.pedal]?.controls.find((c) => c.id === st.heard?.control)?.short || st.heard.control}. Expected
-                      ${hex(st.heard.expect)} (diff ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift}). Shift the map to align?
+                      ${st.heard.drift
+                        ? `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} sent cc ${st.heard.cc}, but our map puts that control on cc ${st.heard.expect}. the whole map looks shifted by ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift} — probably a firmware revision.`
+                        : `cc ${st.heard.cc}, exactly where the map says. the rest of the pedal should line up too.`}
                     </div>
                     <div class="heard-btns">
-                      <button class="btn-accept" @click=${() => this.store.acceptDrift()}>
-                        accept drift (${st.heard.drift > 0 ? '+' : ''}${st.heard.drift})
+                      ${st.heard.drift
+                        ? html`
+                            <button class="btn-accept" @click=${() => this.store.acceptDrift()}>
+                              shift the map by ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift}
+                            </button>
+                          `
+                        : null}
+                      <button class="btn-dismiss" @click=${() => this.store.dismissHeard()}>
+                        ${st.heard.drift ? 'leave it' : 'good'}
                       </button>
-                      <button class="btn-dismiss" @click=${() => this.store.dismissHeard()}>dismiss</button>
                     </div>
                   </div>
                 `
               : null}
 
-            <div class="monitor-row">
+            <div class="monitor-row" ?active=${st.monitorOn}>
               <div style="flex:1;min-width:0">
                 <span style="display:block;font-size:13.5px;font-weight:600">watch the wire</span>
                 <span style="display:block;font-size:11.5px;opacity:.6;margin-top:2px;text-wrap:pretty">
-                  shows live MIDI traffic in a rail at the bottom of the screen.
+                  ${connCount
+                    ? 'every message shows up as it leaves, and anything that goes unanswered gets called out.'
+                    : "connect something first — there's nothing to watch yet."}
                 </span>
               </div>
               <div

@@ -41,8 +41,21 @@ describe('StompStore Hardware Connection & Read Config', () => {
     const store = new StompStore();
     await store.readFrom('scribble');
 
-    if (store.state.readData && store.state.readData.allPresets.length) {
-      store.importSelectedDevicePresets();
+    if (store.state.readData && store.state.readData.presets.length) {
+      const slotNum = store.state.readData.presets[0].n;
+      store.setReadFilter('blooper');
+      expect(store.state.readData.filter).toBe('blooper');
+
+      store.setReadDest(slotNum, 'A:press');
+      expect(store.state.readData.dest[slotNum]).toBeDefined();
+      expect(store.state.readData.dest[slotNum].key).toBe('A');
+      expect(store.state.readData.dest[slotNum].action).toBe('press');
+      expect(store.state.readData.dest[slotNum].mode).toBe('replace');
+
+      store.setReadDestMode(slotNum, 'add');
+      expect(store.state.readData.dest[slotNum].mode).toBe('add');
+
+      store.applyPresets();
       expect(store.state.readOpen).toBe(false);
       expect(store.state.readData).toBeNull();
     }
