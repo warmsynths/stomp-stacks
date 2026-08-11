@@ -12,6 +12,7 @@ import {
   CompilerEngine,
   compile,
 } from '../midi.js';
+import { parseAllScribblePresets } from '../adapters/scribble.js';
 import type { StompState } from '../../state/types.js';
 
 describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
@@ -78,7 +79,7 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
         D: { press: [], hold: [], double: [] },
       },
     ],
-  });
+  } as unknown as StompState);
 
   it('compiles rig.json with updated CC numbers', () => {
     const state = createTestState();
@@ -130,7 +131,7 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
   it('emits exactly the keys the published Scribble schema names', () => {
     const state = createTestState();
     const compiled = compileHardwareScribbleConfig(state);
-    const global = compiled.globalSettings as Record<string, unknown>;
+    const global = compiled.globalSettings as unknown as Record<string, unknown>;
 
     expect(Object.keys(compiled).sort()).toEqual(['bankSettings', 'deviceSettings', 'globalSettings']);
 
@@ -142,7 +143,8 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
 
     // Message routing uses `usb`; the thru handles use `usbd`. Both spellings
     // are correct, in their own place.
-    expect(Object.keys(compiled.bankSettings[0].presetMessages.messages[0].outputs).sort()).toEqual([
+    const msg0 = compiled.bankSettings[0].presetMessages.messages[0] as any;
+    expect(Object.keys(msg0.outputs).sort()).toEqual([
       'ble',
       'midi1',
       'usb',
@@ -203,5 +205,36 @@ describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
     const rigResult = compile(state, 'rig');
     expect(rigResult.targetId).toBe('rig');
     expect(rigResult.exportFile.filename).toBe('rig-stack-chocolate.json');
+  });
+
+  it('compiles and parses custom naming with sequential preset slot numbers', () => {
+    const state = createTestState();
+    state.banks.push({
+      A: { press: [{ device: 'blooper', control: 'volume', value: 100 }], hold: [], double: [] },
+      B: { press: [], hold: [], double: [] },
+      C: { press: [], hold: [], double: [] },
+      D: { press: [], hold: [], double: [] },
+    });
+    state.naming = {
+      '0:A': { name: 'CLOUD', secondary: 'MOOD time', color: 'red' },
+      '0:B': { name: 'GLITCH POP', secondary: 'MOOD time', color: 'orange' },
+      '0:C': { name: 'LOFI DRIFT', secondary: 'MOOD time', color: 'yellow' },
+      '0:D': { name: 'TAPE TRIP', secondary: 'MOOD time', color: 'green' },
+      '1:A': { name: 'BLOOPER', secondary: 'el capistan time', color: 'blue' as any },
+    };
+
+    const compiled = compileHardwareScribbleConfig(state);
+    expect(compiled.bankSettings[0].bankName).toBe('CLOUD');
+    expect(compiled.bankSettings[1].bankName).toBe('GLITCH POP');
+    expect(compiled.bankSettings[2].bankName).toBe('LOFI DRIFT');
+    expect(compiled.bankSettings[3].bankName).toBe('TAPE TRIP');
+    expect(compiled.bankSettings[4].bankName).toBe('BLOOPER');
+
+    const parsed = parseAllScribblePresets(compiled, state.channels, ['A', 'B', 'C', 'D']);
+    expect(parsed[0].slotNumber).toBe(1);
+    expect(parsed[1].slotNumber).toBe(2);
+    expect(parsed[2].slotNumber).toBe(3);
+    expect(parsed[3].slotNumber).toBe(4);
+    expect(parsed[4].slotNumber).toBe(5);
   });
 });

@@ -513,13 +513,16 @@ export class StompStore extends EventTarget {
     const pal = PALETTE.map((p) => p[0]);
 
     const presets: ReadPresetSlot[] = rawParsed.length
-      ? rawParsed.map((p, i) => ({
-          n: p.bankIndex * 4 + (p.key === 'A' ? 1 : p.key === 'B' ? 2 : p.key === 'C' ? 3 : 4),
-          label: p.presetName,
-          second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
-          color: pal[i % pal.length] as ColorName,
-          steps: p.steps,
-        }))
+      ? rawParsed.map((p, i) => {
+          const n = p.slotNumber ?? (p.bankIndex * keys.length + (keys.indexOf(p.key) >= 0 ? keys.indexOf(p.key) + 1 : i + 1));
+          return {
+            n,
+            label: p.presetName,
+            second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
+            color: p.color || (pal[(n - 1) % pal.length] as ColorName),
+            steps: p.steps,
+          };
+        })
       : this.simScribblePresets();
 
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
@@ -600,13 +603,16 @@ export class StompStore extends EventTarget {
     const pal = PALETTE.map((p) => p[0]);
 
     const presets: ReadPresetSlot[] = rawParsed.length
-      ? rawParsed.map((p, i) => ({
-          n: p.bankIndex * 4 + (p.key === 'A' ? 1 : p.key === 'B' ? 2 : p.key === 'C' ? 3 : 4),
-          label: p.presetName,
-          second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
-          color: pal[i % pal.length] as ColorName,
-          steps: p.steps,
-        }))
+      ? rawParsed.map((p, i) => {
+          const n = p.slotNumber ?? (p.bankIndex * keys.length + (keys.indexOf(p.key) >= 0 ? keys.indexOf(p.key) + 1 : i + 1));
+          return {
+            n,
+            label: p.presetName,
+            second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
+            color: p.color || (pal[(n - 1) % pal.length] as ColorName),
+            steps: p.steps,
+          };
+        })
       : this.simScribblePresets();
 
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({

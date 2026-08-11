@@ -432,7 +432,7 @@ export class ReadModal extends LitElement {
                             </span>
                             <div class="preset-info">
                               <span class="preset-title">${p.label}</span>
-                              <span class="preset-steps">${stepsLabel(p.steps)}</span>
+                              <span class="preset-steps">${p.second || stepsLabel(p.steps)}</span>
                             </div>
                             <select
                               class="dest-select"

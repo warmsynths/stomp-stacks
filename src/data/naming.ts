@@ -52,6 +52,45 @@ export const FALLBACK: Partial<Record<ColorName, ColorName>> = {
   pink: 'purple',
 };
 
+export function findClosestPaletteColor(rgbInt: number): ColorName {
+  const r = (rgbInt >> 16) & 0xff;
+  const g = (rgbInt >> 8) & 0xff;
+  const b = rgbInt & 0xff;
+
+  let minDistance = Infinity;
+  let bestColor: ColorName = 'red';
+
+  PALETTE.forEach(([name, hex]) => {
+    const cInt = parseInt(hex.slice(1), 16);
+    const cr = (cInt >> 16) & 0xff;
+    const cg = (cInt >> 8) & 0xff;
+    const cb = cInt & 0xff;
+    const dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestColor = name;
+    }
+  });
+
+  return bestColor;
+}
+
+export function parseScribbleColor(val: any): ColorName | undefined {
+  if (val === null || val === undefined) return undefined;
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase().trim();
+    if (PALETTE.some(([name]) => name === lower)) return lower as ColorName;
+    if (lower.startsWith('#')) {
+      const hexInt = parseInt(lower.slice(1), 16);
+      if (!isNaN(hexInt)) return findClosestPaletteColor(hexInt);
+    }
+  }
+  if (typeof val === 'number' && val > 0) {
+    return findClosestPaletteColor(val);
+  }
+  return undefined;
+}
+
 export function isDark(hexColor: string): boolean {
   const hex = hexColor.startsWith('#') ? hexColor.slice(1) : hexColor;
   if (hex.length !== 6) return true;

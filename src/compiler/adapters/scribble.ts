@@ -9,6 +9,7 @@ import {
   BANK_COUNT,
   MAX_BANK_TEXT_LENGTH,
   MAX_MESSAGES_PER_STACK,
+  hexToRgbInt,
 } from '../../types/scribble.js';
 import { describeStep } from './mc3.js';
 import type { TargetAdapter, TargetExportFile, CompileLine } from './types.js';
@@ -27,7 +28,7 @@ export function eachStack(
   });
 }
 
-import { HEX, TEXTHEX } from '../../data/naming.js';
+import { HEX, TEXTHEX, parseScribbleColor, type ColorName } from '../../data/naming.js';
 
 export function compileScribbleMacroJson(state: StompState) {
   const macros: any[] = [];
@@ -86,58 +87,72 @@ const ALL_OUTPUTS: MessageOutputs = { usb: true, ble: true, midi1: true };
 
 export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig {
   const bankSettings: ScribbleBankSetting[] = [];
+  const keys = ['A', 'B', 'C', 'D'];
 
   for (let i = 0; i < BANK_COUNT; i++) {
-    const isPopulated = i < state.banks.length;
+    const bankIndex = Math.floor(i / keys.length);
+    const keyIndex = i % keys.length;
+    const switchKey = keys[keyIndex];
+    const namingKey = `${bankIndex}:${switchKey}`;
+    const customNaming = state.naming?.[namingKey];
+
     let bankName = `Preset ${i + 1}`;
     let secondaryText = `Second. ${i + 1}`;
     let presetColour = 0;
     const messages: ScribbleMessage[] = [];
 
+    const isPopulated = bankIndex < state.banks.length;
     if (isPopulated) {
-      const bank = state.banks[i];
+      const bank = state.banks[bankIndex];
       const pedalNamesSet = new Set<string>();
       const stepLabels: string[] = [];
 
-      Object.keys(bank).forEach((switchKey) => {
-        ACTIONS.forEach(({ id: action }) => {
-          const steps = bank[switchKey][action];
-          steps.forEach((step) => {
-            const d = describeStep(step, state.channels);
-            pedalNamesSet.add(d.deviceName.toUpperCase());
-            if (stepLabels.length < 2) stepLabels.push(`${d.deviceName} ${d.label}`);
-            if (!presetColour) {
-              presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
-            }
-            messages.push({
-              statusByte: d.message.statusByte,
-              dataByte1: d.message.dataByte1,
-              dataByte2: d.message.dataByte2,
-              outputs: { ...ALL_OUTPUTS },
-            });
+      ACTIONS.forEach(({ id: action }) => {
+        const steps = bank[switchKey]?.[action] || [];
+        steps.forEach((step) => {
+          const d = describeStep(step, state.channels);
+          pedalNamesSet.add(d.deviceName.toUpperCase());
+          if (stepLabels.length < 2) stepLabels.push(`${d.deviceName} ${d.label}`);
+          if (!presetColour) {
+            presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
+          }
+          messages.push({
+            statusByte: d.message.statusByte,
+            dataByte1: d.message.dataByte1,
+            dataByte2: d.message.dataByte2,
+            outputs: { ...ALL_OUTPUTS },
           });
         });
       });
 
-      if (messages.length > 0) {
+      if (customNaming?.name) {
+        bankName = customNaming.name;
+      } else if (messages.length > 0) {
         const pedalsArr = Array.from(pedalNamesSet);
-        bankName = pedalsArr.length ? pedalsArr.join(' + ') : `BANK ${i + 1}`;
-        secondaryText = stepLabels.join(' · ') || `Bank ${i + 1}`;
+        bankName = pedalsArr.length ? pedalsArr.join(' + ') : `BANK ${bankIndex + 1}`;
+      }
+
+      if (customNaming?.secondary) {
+        secondaryText = customNaming.secondary;
+      } else if (messages.length > 0) {
+        secondaryText = stepLabels.join(' · ') || `Bank ${bankIndex + 1}`;
+      }
+
+      if (customNaming?.color && HEX[customNaming.color]) {
+        presetColour = hexToRgbInt(HEX[customNaming.color]);
       }
     }
 
-    // The device caps every stack at 8 messages and every display string at 17
-    // characters; anything longer is rejected rather than truncated on arrival.
     const presetMessages = messages.slice(0, MAX_MESSAGES_PER_STACK);
 
     bankSettings.push({
       bankId: i,
       bankName: bankName.slice(0, MAX_BANK_TEXT_LENGTH),
       secondaryText: secondaryText.slice(0, MAX_BANK_TEXT_LENGTH),
-      colourOverride: messages.length > 0,
-      colour: messages.length > 0 ? (presetColour || 582655) : 0,
-      textColourOverride: messages.length > 0,
-      textColour: messages.length > 0 ? 16777215 : 0,
+      colourOverride: messages.length > 0 || !!customNaming?.color,
+      colour: messages.length > 0 || customNaming?.color ? (presetColour || 582655) : 0,
+      textColourOverride: messages.length > 0 || !!customNaming?.color,
+      textColour: messages.length > 0 || customNaming?.color ? 16777215 : 0,
       midiValueDisplayOverride: false,
       midiValueDisplay: messages.length > 0 ? 'valueOnly' : 'none',
       midiValueDisplayCC: 0,
@@ -210,6 +225,8 @@ export interface ParsedScribblePreset {
   presetName: string;
   secondaryText: string;
   steps: MacroStep[];
+  slotNumber: number;
+  color?: ColorName;
 }
 
 function extractPresetNaming(
@@ -229,11 +246,6 @@ function extractPresetNaming(
     preset?.name ||
     preset?.label ||
     preset?.strip?.name ||
-    sw?.name ||
-    sw?.label ||
-    sw?.presetName ||
-    sw?.bankName ||
-    sw?.strip?.name ||
     '';
 
   let secondary =
@@ -241,10 +253,10 @@ function extractPresetNaming(
     preset?.secondary ||
     preset?.description ||
     preset?.strip?.secondary ||
+    sw?.name ||
+    sw?.label ||
     sw?.secondaryText ||
     sw?.secondary ||
-    sw?.description ||
-    sw?.strip?.secondary ||
     '';
 
   name = typeof name === 'string' ? name.trim() : '';
@@ -332,26 +344,29 @@ export function parseAllScribblePresets(
   }
 
   if (Array.isArray(config?.macros) && config.macros.length > 0) {
-    config.macros.forEach((m: any) => {
-      let bankIndex = 0;
-      let key = 'A';
+    config.macros.forEach((m: any, idx: number) => {
+      let bankIndex = typeof m.trigger?.bank === 'number' ? Math.max(0, m.trigger.bank - 1) : Math.floor(idx / keys.length);
+      let key = keys[idx % keys.length];
 
       if (m.trigger) {
-        if (typeof m.trigger.bank === 'number') {
-          bankIndex = Math.max(0, m.trigger.bank - 1);
-        }
-        if (typeof m.trigger.cc === 'number') {
-          const idx = m.trigger.cc - 80;
-          if (idx >= 0 && idx < keys.length) key = keys[idx];
-        } else if (typeof m.trigger.action === 'string') {
+        if (typeof m.trigger.switchKey === 'string' && keys.includes(m.trigger.switchKey)) {
+          key = m.trigger.switchKey;
+        } else if (typeof m.trigger.cc === 'number') {
+          const cidx = m.trigger.cc - 80;
+          if (cidx >= 0 && cidx < keys.length) key = keys[cidx];
+        } else if (typeof m.trigger.action === 'string' && keys.includes(m.trigger.action)) {
           key = m.trigger.action;
         }
       }
 
       const keyIndex = Math.max(0, keys.indexOf(key));
+      const slotNumber = typeof m.trigger?.slot === 'number'
+        ? m.trigger.slot
+        : (m.trigger?.cc ? bankIndex * keys.length + keyIndex + 1 : idx + 1);
+
       const steps = parseMessageList(m.messages || []);
       const naming = extractPresetNaming(m, keyIndex, steps, bankIndex);
-
+      const color = parseScribbleColor(m.strip?.mainColour ?? m.strip?.color ?? m.colour ?? m.color ?? m.mainColour);
 
       presets.push({
         bankIndex,
@@ -359,6 +374,8 @@ export function parseAllScribblePresets(
         presetName: naming.presetName,
         secondaryText: naming.secondaryText,
         steps,
+        slotNumber,
+        color,
       });
     });
 
@@ -374,8 +391,18 @@ export function parseAllScribblePresets(
       : [];
   if (rawPresets.length > 0) {
     rawPresets.forEach((preset: any, idx: number) => {
-      const bankIndex = typeof preset.bankId === 'number' ? Math.floor(preset.bankId / 4) : Math.floor(idx / 4);
-      const keyIndex = (typeof preset.bankId === 'number' ? preset.bankId : idx) % keys.length;
+      let validBankId = typeof preset.bankId === 'number' 
+        ? preset.bankId 
+        : (typeof preset.presetId === 'number' ? preset.presetId : idx);
+        
+      // Firmware bug workaround: some versions emit `bankId: 0` for all banks.
+      if (validBankId === 0 && idx > 0) {
+        validBankId = idx;
+      }
+
+      const slotNumber = validBankId + 1;
+      const bankIndex = Math.floor((slotNumber - 1) / keys.length);
+      const keyIndex = (slotNumber - 1) % keys.length;
       const key = keys[keyIndex] || 'A';
 
       const presetMsgs = preset.presetMessages?.messages || [];
@@ -395,14 +422,17 @@ export function parseAllScribblePresets(
 
       const hasCustomTitle = naming.presetName && !naming.presetName.match(/^Preset \d+$/i);
       const hasCustomSub = naming.secondaryText && !naming.secondaryText.match(/^Second\. \d+$/i);
+      const color = parseScribbleColor(preset.colour ?? preset.color ?? preset.mainColour ?? preset.strip?.mainColour);
 
-      if (hasCustomTitle || hasCustomSub || steps.length > 0) {
+      if (hasCustomTitle || hasCustomSub || steps.length > 0 || color) {
         presets.push({
           bankIndex,
           key,
           presetName: naming.presetName,
           secondaryText: naming.secondaryText,
           steps,
+          slotNumber,
+          color,
         });
       }
     });
@@ -413,20 +443,21 @@ export function parseAllScribblePresets(
   }
 
 
-  const defaultSampleNames = [
-    { name: 'CLOUD', secondary: 'Ambient Delay' },
-    { name: 'GLITCH POP', secondary: 'Microloop Granular' },
-    { name: 'LOFI DRIFT', secondary: 'Tape Pitch Wobble' },
-    { name: 'TAPE TRIP', secondary: 'Echo Reverse' },
-    { name: 'BLOOPER', secondary: 'Loop Speed + Pitch' },
-    { name: 'MOOD', secondary: 'Reverb + Slip' },
-    { name: 'EL CAPISTAN', secondary: 'Tape Echo' },
-    { name: 'CHROMA', secondary: 'Chorus Flange' },
+  const defaultSampleNames: Array<{ name: string; secondary: string; color: ColorName }> = [
+    { name: 'CLOUD', secondary: 'Ambient Delay', color: 'red' },
+    { name: 'GLITCH POP', secondary: 'Microloop Granular', color: 'orange' },
+    { name: 'LOFI DRIFT', secondary: 'Tape Pitch Wobble', color: 'yellow' },
+    { name: 'TAPE TRIP', secondary: 'Echo Reverse', color: 'green' },
+    { name: 'BLOOPER', secondary: 'Loop Speed + Pitch', color: 'mint' },
+    { name: 'MOOD', secondary: 'Reverb + Slip', color: 'cyan' },
+    { name: 'EL CAPISTAN', secondary: 'Tape Echo', color: 'blue' },
+    { name: 'CHROMA', secondary: 'Chorus Flange', color: 'purple' },
   ];
 
   for (let bi = 0; bi < 4; bi++) {
     keys.forEach((k, ki) => {
-      const pIdx = bi * 4 + ki;
+      const pIdx = bi * keys.length + ki;
+      const slotNumber = pIdx + 1;
       const devId = fallbackDevId;
       const dev = HardwareRegistry.getDevice(devId);
       const ctrl = dev?.controls[ki % (dev?.controls.length || 1)] || dev?.controls[0];
@@ -439,6 +470,8 @@ export function parseAllScribblePresets(
         presetName: sample.name,
         secondaryText: sample.secondary,
         steps,
+        slotNumber,
+        color: sample.color,
       });
     });
   }
