@@ -51,6 +51,7 @@ export class MacroStackModel {
     controlId: string,
     value: number | null,
     maxSteps: number = DEFAULT_MAX_STEPS,
+    label?: string,
   ): Bank[] {
     const next = MacroStackModel.cloneBanks(banks);
     const list = next[bankIndex][switchKey][action];
@@ -63,7 +64,25 @@ export class MacroStackModel {
 
     if (list.length >= maxSteps) return next;
 
-    list.push({ device, control: controlId, value });
+    list.push({ device, control: controlId, value, ...(label ? { label } : {}) });
+    return next;
+  }
+
+  static addMacroTemplateSteps(
+    banks: Bank[],
+    bankIndex: number,
+    switchKey: string,
+    action: ActionId,
+    device: string,
+    steps: Array<{ controlId: string; value: number; label: string }>,
+    maxSteps: number = DEFAULT_MAX_STEPS,
+  ): Bank[] {
+    const next = MacroStackModel.cloneBanks(banks);
+    const list = next[bankIndex][switchKey][action];
+    for (const st of steps) {
+      if (list.length >= maxSteps) break;
+      list.push({ device, control: st.controlId, value: st.value, label: st.label });
+    }
     return next;
   }
 

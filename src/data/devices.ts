@@ -11,6 +11,24 @@ export interface ControlValueOption {
   value: number;
 }
 
+export interface MacroTemplateStep {
+  /** Target control ID on the pedal. */
+  controlId: string;
+  /** Raw MIDI value for this step. */
+  value: number;
+  /** OLED display label (e.g. "REC", "PLAY", "DUB", "STOP"). */
+  label: string;
+}
+
+export interface MacroTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  /** Control ID this template is attached to (e.g. "record", "loop", "tap"). */
+  controlId: string;
+  steps: MacroTemplateStep[];
+}
+
 export interface DeviceControl {
   id: string;
   /** Short label shown on the faceplate hotspot. */
@@ -31,9 +49,9 @@ export interface DeviceControl {
   /** Hotspot size over the real photo, percent of stage width. */
   ps: number;
   /**
-   * Discrete value options for multi-state controls (toggles).
+   * Discrete value options for multi-state controls (toggles, foot/multi-control CCs).
    * Knobs without an explicit list use the shared 5-position KNOB_VALUES.
-   * Foot switches are momentary and always send MAX_VALUE.
+   * Foot switches without a custom list send MAX_VALUE (127).
    */
   values?: ControlValueOption[];
 }
@@ -56,6 +74,8 @@ export interface Device {
   /** Detailed hardware MIDI specification notes & documentation. */
   notes?: string[];
   controls: DeviceControl[];
+  /** Onboard footswitch lifecycle macro templates (e.g. REC -> PLAY -> DUB). */
+  macroTemplates?: MacroTemplate[];
 }
 
 export const MAX_VALUE = 127;
@@ -94,6 +114,7 @@ export const DEVICES: Record<string, Device> = {
       'TRS MIDI Connection: Blooper uses a 1/4" TRS Ring Active connection. Requires a Chase Bliss MIDIBox or compatible TRS adapter for 5-pin MIDI controllers.',
       'Default Channel: Listens on MIDI Channel 2 by default (configurable by holding both stomp switches at power-on and sending a Program Change).',
       'Additive Mode Overdubs: In Additive mode, MIDI CC movements for Modifiers or Stability can be recorded directly into loop overdubs.',
+      'Multi-Control CC 11: CC 11 allows remote control of the onboard switch lifecycle (1=REC, 2=PLAY, 3=DUB, 4=STOP).',
     ],
     controls: [
       { id: 'volume', short: 'ramp volume', label: 'Ramp / Volume', type: 'knob', cc: 14, x: 22, y: 12, px: 18.7, py: 9.7, ps: 20.7 },
@@ -106,8 +127,81 @@ export const DEVICES: Record<string, Device> = {
       { id: 'mode', short: 'norm add samp', label: 'Norm / Add / Samp', type: 'toggle', cc: 22, x: 50, y: 52, px: 49.8, py: 46.8, ps: 12.2, values: [{ label: 'normal', value: 0 }, { label: 'additive', value: 64 }, { label: 'sampling', value: 127 }] },
       { id: 'chB', short: '4 5 6', label: 'Mod B channel', type: 'toggle', cc: 23, x: 78, y: 52, px: 80.7, py: 46.8, ps: 12.2, values: [{ label: '4', value: 0 }, { label: '5', value: 64 }, { label: '6', value: 127 }] },
       { id: 'undo', short: 'undo / redo', label: 'Undo / Redo', type: 'toggle', cc: 5, notes: 'CC 5 triggers Undo, CC 6 triggers Redo', x: 50, y: 82, px: 49.8, py: 85.7, ps: 9.1, values: [{ label: 'undo', value: 0 }, { label: 'off', value: 64 }, { label: 'redo', value: 127 }] },
-      { id: 'record', short: 'record', label: 'Record', type: 'foot', cc: 1, notes: 'CC 1 triggers Record', x: 28, y: 82, px: 19.1, py: 89.1, ps: 19.7 },
-      { id: 'loop', short: 'loop', label: 'Loop', type: 'foot', cc: 2, notes: 'CC 2 triggers Play/Loop, CC 4 triggers Stop', x: 72, y: 82, px: 79.8, py: 89.1, ps: 19.7 },
+      {
+        id: 'record',
+        short: 'record',
+        label: 'Record',
+        type: 'foot',
+        cc: 1,
+        notes: 'CC 1 acts exactly like pressing the left physical footswitch',
+        x: 28,
+        y: 82,
+        px: 19.1,
+        py: 89.1,
+        ps: 19.7,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'record_discrete',
+        short: 'discrete state',
+        label: 'Discrete Record State (CC 11)',
+        type: 'foot',
+        cc: 11,
+        notes: 'CC 11 allows remote control of the onboard switch lifecycle (Requires step-sequencer)',
+        x: 28,
+        y: 89,
+        px: 19.1,
+        py: 95,
+        ps: 10,
+        values: [
+          { label: 'record', value: 1 },
+          { label: 'play', value: 2 },
+          { label: 'overdub', value: 3 },
+          { label: 'stop', value: 4 },
+        ],
+      },
+      {
+        id: 'loop',
+        short: 'loop',
+        label: 'Loop (Right Switch)',
+        type: 'foot',
+        cc: 2,
+        notes: 'CC 2 acts exactly like pressing the right physical footswitch',
+        x: 72,
+        y: 82,
+        px: 79.8,
+        py: 89.1,
+        ps: 19.7,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+    ],
+    macroTemplates: [
+      {
+        id: 'blooper-left-cycle',
+        name: 'Record / Play / Overdub Lifecycle',
+        description: 'Sequences through REC (v1) -> PLAY (v2) -> DUB (v3) -> PLAY (v2) (Requires Step Sequencer)',
+        controlId: 'record_discrete',
+        steps: [
+          { controlId: 'record_discrete', value: 1, label: 'REC' },
+          { controlId: 'record_discrete', value: 2, label: 'PLAY' },
+          { controlId: 'record_discrete', value: 3, label: 'DUB' },
+          { controlId: 'record_discrete', value: 2, label: 'PLAY' },
+        ],
+      },
+      {
+        id: 'blooper-undo-redo',
+        name: 'Undo / Redo Lifecycle',
+        description: 'Triggers Undo (0) followed by Redo (127)',
+        controlId: 'undo',
+        steps: [
+          { controlId: 'undo', value: 0, label: 'UNDO' },
+          { controlId: 'undo', value: 127, label: 'REDO' },
+        ],
+      },
     ],
   },
   mood: {
@@ -139,8 +233,86 @@ export const DEVICES: Record<string, Device> = {
       { id: 'routing', short: 'in · ○+in · ○', label: 'Routing', type: 'toggle', cc: 22, x: 50, y: 52, px: 49.5, py: 47.0, ps: 12.2, values: [{ label: 'in', value: 0 }, { label: 'loop + in', value: 64 }, { label: 'loop', value: 127 }] },
       { id: 'micromode', short: 'stretch tape env', label: 'Micro-looper mode', type: 'toggle', cc: 23, x: 78, y: 52, px: 80.5, py: 47.0, ps: 12.2, values: [{ label: 'stretch', value: 0 }, { label: 'tape', value: 64 }, { label: 'env', value: 127 }] },
       { id: 'bypass', short: 'bypass', label: 'Bypass mode', type: 'toggle', cc: 103, notes: 'CC 103 controls Wet channel bypass; CC 102 controls Micro-looper bypass', x: 50, y: 82, px: 49.5, py: 86.7, ps: 9.1, values: TRI },
-      { id: 'wet', short: 'wet', label: 'Wet channel', type: 'foot', cc: 103, notes: 'CC 103 toggles Wet channel bypass', x: 28, y: 82, px: 18.4, py: 90.3, ps: 19.8 },
-      { id: 'microloop', short: 'micro', label: 'Micro-looper', type: 'foot', cc: 102, notes: 'CC 102 toggles Micro-looper bypass', x: 72, y: 82, px: 79.5, py: 90.3, ps: 19.8 },
+      {
+        id: 'wet',
+        short: 'wet',
+        label: 'Wet channel',
+        type: 'foot',
+        cc: 1,
+        notes: 'CC 1 acts exactly like pressing the left physical footswitch',
+        x: 28,
+        y: 82,
+        px: 18.4,
+        py: 90.3,
+        ps: 19.8,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'wet_discrete',
+        short: 'wet discrete',
+        label: 'Wet Channel Bypass (CC 103)',
+        type: 'foot',
+        cc: 103,
+        notes: 'CC 103 explicitly controls Wet channel bypass state',
+        x: 28,
+        y: 89,
+        px: 18.4,
+        py: 96,
+        ps: 10,
+        values: [
+          { label: 'off', value: 0 },
+          { label: 'on', value: 127 },
+        ],
+      },
+      {
+        id: 'microloop',
+        short: 'micro',
+        label: 'Micro-looper',
+        type: 'foot',
+        cc: 2,
+        notes: 'CC 2 acts exactly like pressing the right physical footswitch',
+        x: 72,
+        y: 82,
+        px: 79.5,
+        py: 90.3,
+        ps: 19.8,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'microloop_discrete',
+        short: 'micro discrete',
+        label: 'Micro-looper State (CC 102)',
+        type: 'foot',
+        cc: 102,
+        notes: 'CC 102 explicitly controls Micro-looper bypass state',
+        x: 72,
+        y: 89,
+        px: 79.5,
+        py: 96,
+        ps: 10,
+        values: [
+          { label: 'off', value: 0 },
+          { label: 'instant', value: 64 },
+          { label: 'on', value: 127 },
+        ],
+      },
+    ],
+    macroTemplates: [
+      {
+        id: 'mood-micro-lifecycle',
+        name: 'Micro-Looper Freeze & Clear Lifecycle',
+        description: 'Sequences Micro-Looper switch through REC/FREEZE (127) -> DUB (64) -> CLEAR (0)',
+        controlId: 'microloop_discrete',
+        steps: [
+          { controlId: 'microloop_discrete', value: 127, label: 'FREEZE' },
+          { controlId: 'microloop_discrete', value: 64, label: 'DUB' },
+          { controlId: 'microloop_discrete', value: 0, label: 'CLEAR' },
+        ],
+      },
     ],
   },
   elcap: {
@@ -170,9 +342,42 @@ export const DEVICES: Record<string, Device> = {
       { id: 'spring', short: 'spring', label: 'Spring', type: 'knob', cc: 18, x: 78, y: 45, px: 85.1, py: 42.5, ps: 17.0 },
       { id: 'head', short: 'tape head', label: 'Tape head', type: 'toggle', cc: 11, x: 40, y: 13, px: 42.8, py: 18.0, ps: 6.7, values: [{ label: 'fixed', value: 0 }, { label: 'multi', value: 64 }, { label: 'single', value: 127 }] },
       { id: 'cmode', short: 'mode', label: 'Mode', type: 'toggle', cc: 19, x: 60, y: 13, px: 56.9, py: 18.0, ps: 6.7, values: [{ label: 'a', value: 0 }, { label: 'b', value: 64 }, { label: 'c', value: 127 }] },
-      { id: 'tap', short: 'tap', label: 'Tap', type: 'foot', cc: 93, notes: 'CC 93 triggers Tap tempo pulse', x: 28, y: 82, px: 18.8, py: 80.1, ps: 14.2 },
-      { id: 'onoff', short: 'on', label: 'On / bypass', type: 'foot', cc: 102, notes: 'CC 102 value 127 engages, 0 bypasses', x: 72, y: 82, px: 81.8, py: 80.1, ps: 14.2 },
+      {
+        id: 'tap',
+        short: 'tap',
+        label: 'Tap / SOS',
+        type: 'foot',
+        cc: 93,
+        notes: 'CC 93 triggers Tap tempo pulse and acts as the SOS looper footswitch in Mode C',
+        x: 28,
+        y: 82,
+        px: 18.8,
+        py: 80.1,
+        ps: 14.2,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'onoff',
+        short: 'on',
+        label: 'On / bypass',
+        type: 'foot',
+        cc: 102,
+        notes: 'CC 102 value 127 engages, 0 bypasses',
+        x: 72,
+        y: 82,
+        px: 81.8,
+        py: 80.1,
+        ps: 14.2,
+        values: [
+          { label: 'bypass', value: 0 },
+          { label: 'infinite', value: 64 },
+          { label: 'engage', value: 127 },
+        ],
+      },
     ],
+    macroTemplates: [],
   },
   genloss: {
     id: 'genloss',
@@ -201,8 +406,86 @@ export const DEVICES: Record<string, Device> = {
       { id: 'dry', short: 'none small unity', label: 'Dry', type: 'toggle', cc: 22, x: 50, y: 52, px: 48.9, py: 46.5, ps: 13.0, values: [{ label: 'none', value: 0 }, { label: 'small', value: 64 }, { label: 'unity', value: 127 }] },
       { id: 'noise', short: 'none mild heavy', label: 'Noise', type: 'toggle', cc: 23, x: 78, y: 52, px: 81.3, py: 46.5, ps: 13.0, values: [{ label: 'none', value: 0 }, { label: 'mild', value: 64 }, { label: 'heavy', value: 127 }] },
       { id: 'preset', short: 'preset', label: 'Preset toggle', type: 'toggle', cc: 101, x: 50, y: 82, px: 49.5, py: 85.8, ps: 9.5, values: TRI },
-      { id: 'auxSw', short: 'aux', label: 'Aux switch', type: 'foot', cc: 103, x: 28, y: 82, px: 17.7, py: 91.5, ps: 21.1 },
-      { id: 'bypass', short: 'bypass', label: 'Bypass', type: 'foot', cc: 102, x: 72, y: 82, px: 79.7, py: 91.5, ps: 21.1 },
+      {
+        id: 'auxSw',
+        short: 'aux',
+        label: 'Aux switch',
+        type: 'foot',
+        cc: 1,
+        notes: 'CC 1 acts exactly like pressing the left physical footswitch',
+        x: 28,
+        y: 82,
+        px: 17.7,
+        py: 91.5,
+        ps: 21.1,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'aux_discrete',
+        short: 'aux discrete',
+        label: 'Aux State (CC 103)',
+        type: 'foot',
+        cc: 103,
+        notes: 'CC 103 explicitly controls Aux performance state',
+        x: 28,
+        y: 89,
+        px: 17.7,
+        py: 97,
+        ps: 10,
+        values: [
+          { label: 'stop', value: 0 },
+          { label: 'filter', value: 64 },
+          { label: 'fail', value: 127 },
+        ],
+      },
+      {
+        id: 'bypass',
+        short: 'bypass',
+        label: 'Bypass',
+        type: 'foot',
+        cc: 2,
+        notes: 'CC 2 acts exactly like pressing the right physical footswitch',
+        x: 72,
+        y: 82,
+        px: 79.7,
+        py: 91.5,
+        ps: 21.1,
+        values: [
+          { label: 'tap', value: 127 },
+        ],
+      },
+      {
+        id: 'bypass_discrete',
+        short: 'bypass discrete',
+        label: 'Bypass State (CC 102)',
+        type: 'foot',
+        cc: 102,
+        notes: 'CC 102 explicitly controls Bypass state',
+        x: 72,
+        y: 89,
+        px: 79.7,
+        py: 97,
+        ps: 10,
+        values: [
+          { label: 'off', value: 0 },
+          { label: 'on', value: 127 },
+        ],
+      },
+    ],
+    macroTemplates: [
+      {
+        id: 'genloss-aux-cycle',
+        name: 'Aux Performance Switch Lifecycle',
+        description: 'Sequences Aux switch through STOP (0) -> FILTER (64) -> FAIL (127)',
+        controlId: 'aux_discrete',
+        steps: [
+          { controlId: 'aux_discrete', value: 0, label: 'STOP' },
+          { controlId: 'aux_discrete', value: 64, label: 'FLTR' },
+          { controlId: 'aux_discrete', value: 127, label: 'FAIL' },
+        ],
+      },
     ],
   },
 };

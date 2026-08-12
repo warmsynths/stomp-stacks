@@ -367,6 +367,65 @@ export class MacroPanel extends LitElement {
           background 150ms ease,
           box-shadow 150ms ease;
       }
+      .pop-section-title {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.7;
+        margin: 10px 0 6px;
+      }
+      .pop-templates {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pop-template-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 8px 11px;
+        border-radius: 14px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        text-align: left;
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          box-shadow 150ms ease;
+      }
+      .pop-template-btn:hover {
+        background: var(--mustard);
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .tmpl-name {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .tmpl-desc {
+        font-size: 10.5px;
+        opacity: 0.75;
+      }
+      .tmpl-badges {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+      .step-chip {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--ink);
+        color: var(--panel-warm);
+      }
+      .step-arrow {
+        font-size: 9px;
+        opacity: 0.5;
+      }
       .list {
         flex: 1;
         min-height: 0;
@@ -726,9 +785,14 @@ export class MacroPanel extends LitElement {
             <div class="popover">
               <div class="popover-head">
                 <span class="pop-dot" style="background:${popDevice.accent}"></span>
-                <span class="pop-title">${popControl.label} lands on…</span>
+                <span class="pop-title">${popControl.label}</span>
                 <button class="pop-close" @click=${() => this.store.closePopover()}>×</button>
               </div>
+
+              ${popDevice.macroTemplates?.some((t) => t.controlId === popControl.id)
+                ? html`<div class="pop-section-title">Single Action</div>`
+                : null}
+
               <div class="pop-options">
                 ${HardwareRegistry.valueOptionsFor(popControl).map((opt) => {
                   const on = list.some((s) => s.device === st.browseDevice && s.control === popControl.id && s.value === opt.value);
@@ -736,13 +800,39 @@ export class MacroPanel extends LitElement {
                     <button
                       class="pop-option"
                       style=${on ? 'background:var(--sky);font-weight:600;box-shadow:2px 2px 0 var(--ink)' : ''}
-                      @click=${() => this.store.addStep(popControl.id, opt.value)}
+                      @click=${() => this.store.addStep(popControl.id, opt.value, opt.label.toUpperCase())}
                     >
                       ${opt.label}
                     </button>
                   `;
                 })}
               </div>
+
+              ${popDevice.macroTemplates?.some((t) => t.controlId === popControl.id)
+                ? html`
+                    <div class="pop-section-title">Onboard Switch Lifecycle</div>
+                    <div class="pop-templates">
+                      ${popDevice.macroTemplates
+                        .filter((t) => t.controlId === popControl.id)
+                        .map(
+                          (tmpl) => html`
+                            <button class="pop-template-btn" @click=${() => this.store.applyMacroTemplate(tmpl.id)}>
+                              <span class="tmpl-name">${tmpl.name}</span>
+                              ${tmpl.description ? html`<span class="tmpl-desc">${tmpl.description}</span>` : null}
+                              <div class="tmpl-badges">
+                                ${tmpl.steps.map(
+                                  (st, idx) => html`
+                                    ${idx > 0 ? html`<span class="step-arrow">→</span>` : null}
+                                    <span class="step-chip">${st.label}</span>
+                                  `,
+                                )}
+                              </div>
+                            </button>
+                          `,
+                        )}
+                    </div>
+                  `
+                : null}
             </div>
           `
         : null}

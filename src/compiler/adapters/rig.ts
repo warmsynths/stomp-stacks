@@ -3,6 +3,7 @@ import { ACTIONS } from '../../data/controllers.js';
 import { MAX_VALUE } from '../../data/devices.js';
 import { HardwareRegistry } from '../../data/registry.js';
 import type { TargetAdapter, TargetExportFile, CompileLine } from './types.js';
+import { describeStep } from './mc3.js';
 
 export function getUsedDeviceIds(state: StompState): string[] {
   const map: Record<string, boolean> = {};
@@ -56,11 +57,15 @@ export function compileRigJson(state: StompState) {
         const outActions: Record<string, any> = {};
         ACTIONS.forEach((a) => {
           if (b[k][a.id].length) {
-            outActions[a.id] = b[k][a.id].map((s: MacroStep) => ({
-              pedal: s.device,
-              control: s.control,
-              value: s.value === null || s.value === undefined ? MAX_VALUE : s.value,
-            }));
+            outActions[a.id] = b[k][a.id].map((s: MacroStep) => {
+              const d = describeStep(s, state.channels);
+              return {
+                pedal: s.device,
+                control: s.control,
+                value: s.value === null || s.value === undefined ? MAX_VALUE : s.value,
+                label: d.stepLabel || d.label,
+              };
+            });
           }
         });
         if (Object.keys(outActions).length) {

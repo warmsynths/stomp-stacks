@@ -14,6 +14,7 @@ export interface CompiledMessage {
 
 export interface DescribedStep {
   label: string;
+  stepLabel: string;
   deviceId: string;
   deviceName: string;
   accent: string;
@@ -28,17 +29,29 @@ export function describeStep(step: MacroStep, channels?: Record<string, number>)
   const control = HardwareRegistry.getControl(step.device, step.control);
   const channel = channels && channels[step.device] ? channels[step.device] : device?.midiChannel || 1;
   const value = step.value ?? MAX_VALUE;
-  
+
+  let stepLabel = step.label || '';
+  if (!stepLabel && step.value !== null && step.value !== undefined && control) {
+    const opt = HardwareRegistry.valueOptionsFor(control).find((v) => v.value === step.value);
+    if (opt) stepLabel = opt.label.toUpperCase();
+  }
+  if (!stepLabel && control) {
+    stepLabel = control.short.toUpperCase();
+  }
+
   let label = control?.label || step.control;
-  if (step.value !== null && step.value !== undefined && control) {
+  if (step.label) {
+    label += ' · ' + step.label;
+  } else if (step.value !== null && step.value !== undefined && control) {
     const opt = HardwareRegistry.valueOptionsFor(control).find((v) => v.value === step.value);
     if (opt) label += ' · ' + opt.label;
   }
   const cc = control?.cc || 0;
   const statusByte = CC_STATUS_BASE + (channel - 1);
-  
+
   return {
     label,
+    stepLabel,
     deviceId: device?.id || step.device,
     deviceName: device?.name || step.device,
     accent: device?.accent || '#ffffff',
@@ -73,7 +86,13 @@ export function compileMc3Json(state: StompState) {
         if (list.length) {
           acts[NAME_MAP[a.id]] = list.slice(0, 6).map((s) => {
             const d = describeStep(s, state.channels);
-            return { type: 'Control Change', channel: d.channel, cc: d.cc, value: d.value };
+            return {
+              type: 'Control Change',
+              channel: d.channel,
+              cc: d.cc,
+              value: d.value,
+              label: d.stepLabel || d.label,
+            };
           });
         }
       });

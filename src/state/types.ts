@@ -6,6 +6,8 @@ export interface MacroStep {
   control: string;
   /** Raw MIDI value for this step, or null for a momentary footswitch (sends MAX_VALUE). */
   value: number | null;
+  /** Custom dynamic OLED display label (e.g. "REC", "PLAY", "DUB", "STOP"). */
+  label?: string;
 }
 
 export type ActionBucket = { press: MacroStep[]; hold: MacroStep[]; double: MacroStep[] };

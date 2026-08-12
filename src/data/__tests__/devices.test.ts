@@ -70,8 +70,8 @@ describe('Device Dictionary Data', () => {
     expect(findCc('wetmode')).toBe(21);
     expect(findCc('routing')).toBe(22);
     expect(findCc('micromode')).toBe(23);
-    expect(findCc('wet')).toBe(103);
-    expect(findCc('microloop')).toBe(102);
+    expect(findCc('wet')).toBe(1);
+    expect(findCc('microloop')).toBe(2);
 
     expect(mood.notes).toBeDefined();
     expect(mood.notes!.some((n) => n.includes('CC 102') && n.includes('CC 103'))).toBe(true);
@@ -110,8 +110,8 @@ describe('Device Dictionary Data', () => {
     expect(findCc('dry')).toBe(22);
     expect(findCc('noise')).toBe(23);
     expect(findCc('preset')).toBe(101);
-    expect(findCc('auxSw')).toBe(103);
-    expect(findCc('bypass')).toBe(102);
+    expect(findCc('auxSw')).toBe(1);
+    expect(findCc('bypass')).toBe(2);
   });
 
   it('returns default KNOB_VALUES for knobs without custom values option list', () => {

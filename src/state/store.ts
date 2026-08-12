@@ -142,9 +142,13 @@ export class StompStore extends EventTarget {
     this.set({ targetId: id });
   }
 
-  /** A knob/toggle opens its value popover; a footswitch assigns immediately (momentary). */
+  /** A control opens its popover if it has value options, macro templates, or is multi-state; otherwise assigns immediately. */
   clickControl(control: DeviceControl) {
-    if (control.type !== 'foot') {
+    const device = HardwareRegistry.getDevice(this.state.browseDevice);
+    const hasTemplates = device?.macroTemplates?.some((t) => t.controlId === control.id);
+    const hasValues = (control.values && control.values.length > 0) || control.type === 'knob' || control.type === 'toggle';
+
+    if (hasValues || hasTemplates) {
       this.set({
         popoverControlId: this.state.popoverControlId === control.id ? null : control.id,
         sheetOpen: true,
@@ -155,7 +159,7 @@ export class StompStore extends EventTarget {
   }
 
   /** Toggles the step off if it's already assigned; otherwise appends (capped at MAX_STEPS). */
-  addStep(controlId: string, value: number | null) {
+  addStep(controlId: string, value: number | null, label?: string) {
     const { banks, bank, selectedKey, action, browseDevice } = this.state;
     const updatedBanks = MacroStackModel.addOrToggleStep(
       banks,
@@ -165,6 +169,25 @@ export class StompStore extends EventTarget {
       browseDevice,
       controlId,
       value,
+      MAX_STEPS,
+      label,
+    );
+    this.set({ banks: updatedBanks, popoverControlId: null, sheetOpen: true });
+  }
+
+  /** Inserts all steps from an onboard switch lifecycle macro template into the active action bucket. */
+  applyMacroTemplate(templateId: string) {
+    const { banks, bank, selectedKey, action, browseDevice } = this.state;
+    const device = HardwareRegistry.getDevice(browseDevice);
+    const tmpl = device?.macroTemplates?.find((t) => t.id === templateId);
+    if (!tmpl) return;
+    const updatedBanks = MacroStackModel.addMacroTemplateSteps(
+      banks,
+      bank,
+      selectedKey,
+      action,
+      browseDevice,
+      tmpl.steps,
       MAX_STEPS,
     );
     this.set({ banks: updatedBanks, popoverControlId: null, sheetOpen: true });

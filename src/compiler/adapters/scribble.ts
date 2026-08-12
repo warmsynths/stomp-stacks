@@ -112,7 +112,9 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
         steps.forEach((step) => {
           const d = describeStep(step, state.channels);
           pedalNamesSet.add(d.deviceName.toUpperCase());
-          if (stepLabels.length < 2) stepLabels.push(`${d.deviceName} ${d.label}`);
+          if (stepLabels.length < 3) {
+            stepLabels.push(d.stepLabel ? `${d.deviceName.toUpperCase()} ${d.stepLabel}` : `${d.deviceName} ${d.label}`);
+          }
           if (!presetColour) {
             presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
           }
@@ -188,11 +190,12 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       midiChannel: 0, // Device API channels are zero-based (0-15)
       globalBpm: 120,
       midiOutPortMode: 'midiOutA',
-      pcBankOutputs: { usbd: 1, ble: 1, midi1: 1 },
+      bankPcMidiOutputs: { usbd: 1, ble: 1, midi1: 1 },
       clockMode: 'external',
       clockDisplayType: 'bpm',
+      tapTempoQuant: 'none',
       usbdThruHandles: { usbd: true, ble: true, midi1: true },
-      bleThruHandles: { usbd: true, ble: true, midi1: true },
+      bleThruHandles: { usbd: false, ble: false, midi1: false },
       midi1ThruHandles: { usbd: true, ble: true, midi1: true },
       midiClockOutHandles: { usbd: true, ble: true, midi1: true },
       switches: [
@@ -210,12 +213,13 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       wirelessType: 'ble',
       bleMode: 'server',
       mainTextResize: false,
+      zeroIndexBanks: false,
       kemperPlayerMode: false,
       useStaticIp: false,
       staticIp: '0.0.0.0',
       gatewayIp: '0.0.0.0',
     },
-    bankSettings,
+    presetSettings: bankSettings,
   };
 }
 
@@ -513,7 +517,7 @@ export class ScribbleTargetAdapter implements TargetAdapter {
   compileExport(state: StompState): TargetExportFile {
     const json = compileHardwareScribbleConfig(state);
     return {
-      filename: 'scribble.json',
+      filename: 'scribble.customization',
       mimeType: 'application/json',
       content: JSON.stringify(json, null, 2),
     };

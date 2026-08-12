@@ -128,7 +128,8 @@ export interface ScribbleGlobalSettings {
   midiOutPortMode: 'midiOutA' | 'midiOutB';
   clockMode: ScribbleClockMode;
   clockDisplayType: ScribbleClockDisplayType;
-  pcBankOutputs: PcBankOutputs;
+  bankPcMidiOutputs: PcBankOutputs;
+  tapTempoQuant: string;
   usbdThruHandles: PortHandles;
   bleThruHandles: PortHandles;
   midi1ThruHandles: PortHandles;
@@ -146,6 +147,7 @@ export interface ScribbleGlobalSettings {
   staticIp: string;
   gatewayIp: string;
   mainTextResize: boolean;
+  zeroIndexBanks: boolean;
   midiValueDisplay: ScribbleMidiValueDisplay;
   midiValueDisplayCC: number; // 0-127
   kemperPlayerMode: boolean;
@@ -174,7 +176,7 @@ export type ScribblePresetSetting = ScribbleBankSetting;
 export interface ScribbleConfig {
   deviceSettings: ScribbleDeviceSettings;
   globalSettings: ScribbleGlobalSettings;
-  bankSettings: ScribbleBankSetting[]; // up to 128
+  presetSettings: ScribbleBankSetting[]; // up to 128
 }
 
 /** Max display-text length for bank name and secondary text. */
@@ -254,7 +256,7 @@ export const scribbleJsonSchema = {
   $id: 'piratemidi:scribble:v1.0.1:scribble',
   title: 'Pirate MIDI Scribble Device API (v1.0.1)',
   type: 'object',
-  required: ['deviceSettings', 'globalSettings', 'bankSettings'],
+  required: ['deviceSettings', 'globalSettings', 'presetSettings'],
   properties: {
     deviceSettings: {
       type: 'object',
@@ -283,7 +285,8 @@ export const scribbleJsonSchema = {
         'midiOutPortMode',
         'clockMode',
         'clockDisplayType',
-        'pcBankOutputs',
+        'tapTempoQuant',
+        'bankPcMidiOutputs',
         'usbdThruHandles',
         'bleThruHandles',
         'midi1ThruHandles',
@@ -301,6 +304,7 @@ export const scribbleJsonSchema = {
         'staticIp',
         'gatewayIp',
         'mainTextResize',
+        'zeroIndexBanks',
         'midiValueDisplay',
         'midiValueDisplayCC',
         'kemperPlayerMode',
@@ -318,7 +322,8 @@ export const scribbleJsonSchema = {
         midiOutPortMode: { type: 'string', enum: ['midiOutA', 'midiOutB'] },
         clockMode: { type: 'string', enum: ['preset', 'external', 'global', 'none'] },
         clockDisplayType: { type: 'string', enum: ['bpm', 'ms', 'indicator'] },
-        pcBankOutputs: {
+        tapTempoQuant: { type: 'string' },
+        bankPcMidiOutputs: {
           type: 'object',
           required: ['usbd', 'ble', 'midi1'],
           additionalProperties: false,
@@ -361,6 +366,7 @@ export const scribbleJsonSchema = {
         staticIp: { type: 'string' },
         gatewayIp: { type: 'string' },
         mainTextResize: { type: 'boolean' },
+        zeroIndexBanks: { type: 'boolean' },
         midiValueDisplay: {
           type: 'string',
           enum: ['none', 'bar', 'barPercent', 'barValue', 'percentOnly', 'valueOnly'],
@@ -369,7 +375,7 @@ export const scribbleJsonSchema = {
         kemperPlayerMode: { type: 'boolean' },
       },
     },
-    bankSettings: {
+    presetSettings: {
       type: 'array',
       maxItems: BANK_COUNT,
       items: {
