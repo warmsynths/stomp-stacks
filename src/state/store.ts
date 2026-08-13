@@ -56,8 +56,6 @@ function initialState(controllerId: string): StompState {
     monitorOn: false,
     log: [],
     seq: 0,
-    channelToolOpen: null,
-    channelGuidedStep: 0,
   };
 }
 
@@ -112,15 +110,14 @@ export class StompStore extends EventTarget {
     this.set({ channels, channelPickerOpen: false });
   }
 
-  toggleChannelTool(id: string) {
-    this.set({
-      channelToolOpen: this.state.channelToolOpen === id ? null : id,
-      channelGuidedStep: 0
+  sendTestCC(channel: number) {
+    // Send CC 93 (Tap Tempo / harmless on Chase Bliss) with value 127
+    midiService.sendControlChange(channel, 93, 127);
+    this.pushLog({
+      text: `sent test cc 93 on ch ${channel}`,
+      sub: `sweeper diagnostic`,
+      tone: 'out'
     });
-  }
-
-  setGuidedStep(step: number) {
-    this.set({ channelGuidedStep: step });
   }
 
   sendGuidedPC(id: string, channel: number) {
@@ -129,11 +126,7 @@ export class StompStore extends EventTarget {
     
     // Update the app state with the new channel
     const channels = { ...this.state.channels, [id]: channel };
-    this.set({ 
-      channels, 
-      channelToolOpen: null,
-      channelGuidedStep: 0 
-    });
+    this.set({ channels });
     
     this.pushLog({
       text: `sent program change 0 on ch ${channel}`,

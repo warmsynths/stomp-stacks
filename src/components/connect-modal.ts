@@ -412,8 +412,6 @@ export class ConnectModal extends LitElement {
                 const on = !!st.conn[r.id];
                 const listening = st.listening === r.id;
                 const dotBg = on ? (r.id === 'scribble' ? '#8fd0e6' : DEVICES[r.id]?.accent || '#8fd0e6') : 'transparent';
-                const isPedal = r.id !== 'scribble' && r.id !== st.controllerId;
-                const toolsOpen = st.channelToolOpen === r.id;
 
                 return html`
                   <div class="dev-row">
@@ -443,13 +441,6 @@ export class ConnectModal extends LitElement {
                           </button>
                         `
                       : null}
-                    ${isPedal 
-                      ? html`
-                          <button class="btn-action" style="background: ${toolsOpen ? 'var(--mustard)' : 'var(--card)'}" @click=${() => this.store.toggleChannelTool(r.id)}>
-                            tools
-                          </button>
-                        ` 
-                      : null}
                     <button
                       class="btn-toggle"
                       ?on=${on}
@@ -458,33 +449,6 @@ export class ConnectModal extends LitElement {
                       ${on ? 'drop' : 'connect'}
                     </button>
                   </div>
-                  ${toolsOpen ? html`
-                    <div class="tools-panel">
-                      <div class="tools-header">Guided Channel Setup</div>
-                      <ol class="guided-steps">
-                        <li><span class="step-num">1.</span> Unplug power from the pedal.</li>
-                        <li><span class="step-num">2.</span> Hold down both footswitches.</li>
-                        <li><span class="step-num">3.</span> Plug power back in while holding.</li>
-                        <li><span class="step-num">4.</span> Wait for the LEDs to indicate channel setup mode.</li>
-                        <li><span class="step-num">5.</span> Pick a channel and send a PC message.</li>
-                      </ol>
-                      <div class="guided-controls">
-                        <select class="channel-select" id="channel-select-${r.id}" .value=${(st.channels[r.id] || 1).toString()}>
-                          ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
-                            <option value=${ch}>Channel ${ch}</option>
-                          `)}
-                        </select>
-                        <button class="btn-send" @click=${() => {
-                          const select = this.shadowRoot?.querySelector<HTMLSelectElement>(`#channel-select-${r.id}`);
-                          if (select) {
-                            this.store.sendGuidedPC(r.id, parseInt(select.value, 10));
-                          }
-                        }}>
-                          Send PC Message
-                        </button>
-                      </div>
-                    </div>
-                  ` : null}
                 `;
               })}
             </div>

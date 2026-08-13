@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
 import { HardwareRegistry } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
@@ -169,15 +169,170 @@ export class DeviceTabs extends LitElement {
         background: var(--card);
         transition: background 140ms ease;
       }
+      .help-btn {
+        margin-top: 10px;
+        width: 100%;
+        padding: 6px;
+        border-radius: 9px;
+        background: var(--paper);
+        border: 2px dashed var(--ink);
+        font-size: 11.5px;
+        font-weight: 500;
+        opacity: 0.7;
+        transition: opacity 150ms ease, background 150ms ease;
+      }
+      .help-btn:hover {
+        opacity: 1;
+        background: var(--panel-warm);
+      }
+      .menu-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        border: 2px solid var(--ink);
+        background: var(--paper);
+        font-size: 13px;
+        font-weight: 600;
+        transition: background 150ms ease, transform 100ms ease;
+      }
+      .menu-btn:hover {
+        background: var(--sky);
+      }
+      .menu-btn:active {
+        transform: scale(0.98);
+      }
+      .menu-btn:last-child {
+        margin-bottom: 0;
+      }
+      @keyframes sweepPulse {
+        0% { transform: scale(0.95); opacity: 0.7; }
+        100% { transform: scale(1.05); opacity: 1; }
+      }
+      .sweep-display {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 0;
+      }
+      .sweep-num {
+        font-family: var(--mono);
+        font-size: 36px;
+        font-weight: 700;
+        color: var(--mustard);
+        margin-bottom: 12px;
+        animation: sweepPulse 700ms ease-in-out infinite alternate;
+      }
+      .sweep-sub {
+        font-size: 12px;
+        opacity: 0.7;
+        text-align: center;
+        text-wrap: pretty;
+      }
+      .guided-steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        opacity: 0.8;
+      }
+      .guided-steps li {
+        margin-bottom: 8px;
+        display: flex;
+        gap: 8px;
+      }
+      .step-num {
+        font-weight: 600;
+        color: var(--mustard);
+      }
+      .guided-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .channel-select {
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        outline: none;
+        cursor: pointer;
+      }
+      .btn-send {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 12px;
+        background: var(--sky);
+        border: 2px solid var(--ink);
+        box-shadow: 2px 2px 0 var(--ink);
+        font-size: 12.5px;
+        font-weight: 600;
+        transition: transform 100ms, box-shadow 100ms;
+      }
+      .btn-send:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--ink);
+      }
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.6;
+        margin-bottom: 12px;
+        transition: opacity 150ms;
+      }
+      .back-btn:hover {
+        opacity: 1;
+      }
     `,
   ];
 
   @property({ attribute: false }) store!: StompStore;
   private storeController!: StoreController;
 
+  @state() private helpView: 'none' | 'menu' | 'sweep' | 'guide' = 'none';
+  @state() private sweepChannel: number = 1;
+  private sweepInterval: any = null;
+
   connectedCallback() {
     super.connectedCallback();
     this.storeController ??= new StoreController(this, this.store);
+  }
+
+  updated() {
+    if (!this.store.state.channelPickerOpen && this.helpView !== 'none') {
+      this.resetHelp();
+    }
+  }
+
+  private resetHelp() {
+    this.helpView = 'none';
+    this.stopSweep();
+  }
+
+  private startSweep() {
+    this.helpView = 'sweep';
+    this.sweepChannel = 1;
+    this.store.sendTestCC(this.sweepChannel);
+    this.sweepInterval = setInterval(() => {
+      this.sweepChannel = this.sweepChannel < 16 ? this.sweepChannel + 1 : 1;
+      this.store.sendTestCC(this.sweepChannel);
+    }, 700);
+  }
+
+  private stopSweep() {
+    if (this.sweepInterval) {
+      clearInterval(this.sweepInterval);
+      this.sweepInterval = null;
+    }
   }
 
   render() {
@@ -234,23 +389,75 @@ export class DeviceTabs extends LitElement {
         ${st.channelPickerOpen
           ? html`
               <div class="chan-popover">
-                <div class="pop-title">${currentDevice?.name} · midi channel</div>
-                <div class="pop-sub">every message for this pedal goes out on this channel.</div>
-                <div class="chan-grid">
-                  ${Array.from({ length: 16 }, (_, i) => {
-                    const n = i + 1;
-                    const isSelected = currentChannel === n;
-                    return html`
-                      <button
-                        class="chan-opt"
-                        style=${isSelected ? `background:${currentDevice?.accent};font-weight:600` : 'background:var(--card)'}
-                        @click=${() => this.store.setPedalChannel(active, n)}
-                      >
-                        ${n}
-                      </button>
-                    `;
-                  })}
-                </div>
+                ${this.helpView === 'none' ? html`
+                  <div class="pop-title">${currentDevice?.name} · midi channel</div>
+                  <div class="pop-sub">every message for this pedal goes out on this channel.</div>
+                  <div class="chan-grid">
+                    ${Array.from({ length: 16 }, (_, i) => {
+                      const n = i + 1;
+                      const isSelected = currentChannel === n;
+                      return html`
+                        <button
+                          class="chan-opt"
+                          style=${isSelected ? `background:${currentDevice?.accent};font-weight:600` : 'background:var(--card)'}
+                          @click=${() => this.store.setPedalChannel(active, n)}
+                        >
+                          ${n}
+                        </button>
+                      `;
+                    })}
+                  </div>
+                  <button class="help-btn" @click=${() => (this.helpView = 'menu')}>
+                    Need help finding or setting your channel?
+                  </button>
+                ` : this.helpView === 'menu' ? html`
+                  <button class="reset back-btn" @click=${() => (this.helpView = 'none')}>← back to channels</button>
+                  <div class="pop-title">channel tools</div>
+                  <div class="pop-sub" style="margin-bottom:16px">having trouble getting ${currentDevice?.name || 'this pedal'} to listen?</div>
+                  <button class="menu-btn" @click=${() => this.startSweep()}>
+                    Find my channel
+                    <span style="display:block;font-size:11px;font-weight:400;opacity:0.6;margin-top:2px">Watch the pedal's LED while we sweep through 1-16</span>
+                  </button>
+                  <button class="menu-btn" @click=${() => (this.helpView = 'guide')}>
+                    Set a new channel
+                    <span style="display:block;font-size:11px;font-weight:400;opacity:0.6;margin-top:2px">Walk through the hardware MIDI learn steps</span>
+                  </button>
+                ` : this.helpView === 'sweep' ? html`
+                  <button class="reset back-btn" @click=${() => { this.stopSweep(); this.helpView = 'menu'; }}>← back</button>
+                  <div class="pop-title">sweeping channels...</div>
+                  <div class="pop-sub">sending test CCs. when the pedal's LED flashes, that's your channel.</div>
+                  <div class="sweep-display">
+                    <div class="sweep-num">${this.sweepChannel}</div>
+                    <div class="sweep-sub">sending CC 93 (127) on channel ${this.sweepChannel}</div>
+                  </div>
+                ` : this.helpView === 'guide' ? html`
+                  <button class="reset back-btn" @click=${() => (this.helpView = 'menu')}>← back</button>
+                  <div class="pop-title">set a new channel</div>
+                  <ol class="guided-steps">
+                    <li><span class="step-num">1.</span> Unplug power from the pedal.</li>
+                    <li><span class="step-num">2.</span> Hold down both footswitches.</li>
+                    <li><span class="step-num">3.</span> Plug power back in while holding.</li>
+                    <li><span class="step-num">4.</span> Wait for the LEDs to indicate setup mode.</li>
+                    <li><span class="step-num">5.</span> Pick a channel and send a PC message.</li>
+                  </ol>
+                  <div class="guided-controls">
+                    <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
+                      ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
+                        <option value=${ch}>Channel ${ch}</option>
+                      `)}
+                    </select>
+                    <button class="btn-send" @click=${() => {
+                      const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
+                      if (select) {
+                        this.store.sendGuidedPC(active, parseInt(select.value, 10));
+                        this.helpView = 'none';
+                        this.store.toggleChannelPicker();
+                      }
+                    }}>
+                      Send PC Message
+                    </button>
+                  </div>
+                ` : null}
               </div>
             `
           : null}

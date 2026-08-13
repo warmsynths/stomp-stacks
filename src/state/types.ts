@@ -144,7 +144,5 @@ export interface StompState {
   monitorOn: boolean;
   log: WireLogEntry[];
   seq: number;
-  channelToolOpen: string | null;
-  channelGuidedStep: number;
 }
 

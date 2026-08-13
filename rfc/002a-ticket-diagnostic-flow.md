@@ -20,6 +20,6 @@ Based on research, setting a channel on a Chase Bliss pedal requires a manual ha
 
 **Option 3: Both**
 
-We will build both tools into the debugging panel:
+We will build both tools directly into the **pedal channel selector popover** (rather than a separate modal/panel) so they are contextually available exactly where the user goes to change a channel:
 1. **The "Channel Sweeper" (Discovery) Flow:** A tool that sends a safe, visible CC message (like toggling bypass) across channels 1-16. It will highlight the current channel being tested, and the user can stop the sweep when they see their physical pedal react.
 2. **The "Guided Set" Flow:** A wizard-like flow that walks the user through the 5 hardware steps to manually re-assign the pedal's MIDI channel, providing a button to send the final PC message on the newly desired channel.

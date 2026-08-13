@@ -12,9 +12,9 @@ Working code merged that surfaces a Chase Bliss pedal's current MIDI channel in 
 
 ## Decisions so far
 
-- **Diagnostic Flow:** We will build *both* a "Channel Sweeper" (Discovery) flow and a "Guided Set" flow in the debugging panel (see [Ticket 1](file:///c:/reyn/Projects/stomp-stacks/rfc/002a-ticket-diagnostic-flow.md)).
+- **Diagnostic Flow:** We will build *both* a "Channel Sweeper" (Discovery) flow and a "Guided Set" flow in the channel selector popover (see [Ticket 1](file:///c:/reyn/Projects/stomp-stacks/rfc/002a-ticket-diagnostic-flow.md)).
 - **State Persistence:** The confirmed channel will be written back to the global app state using `StompStore.setPedalChannel(id, channel)`.
-- **UI Components:** The debugging panel will host a new section for MIDI channel diagnostic tools, rendering the sweeper controls and the guided wizard steps.
+- **UI Components:** The pedal channel selector popover will host a new section for MIDI channel diagnostic tools, rendering the sweeper controls and the guided wizard steps beneath the manual channel selection.
 
 ## Frontier (Open Tickets)
 
