@@ -214,6 +214,21 @@ export class WebMidiService {
       }
     });
   }
+
+  /**
+   * Transmits MIDI Program Change message out through Web MIDI if available.
+   */
+  sendProgramChange(channel: number, program: number) {
+    if (!this.midiAccess) return;
+    const status = 0xc0 | ((channel - 1) & 0x0f);
+    this.midiAccess.outputs.forEach((output) => {
+      try {
+        output.send([status, program & 0x7f]);
+      } catch (e) {
+        // Output port not active or error sending
+      }
+    });
+  }
 }
 
 export const midiService = new WebMidiService();

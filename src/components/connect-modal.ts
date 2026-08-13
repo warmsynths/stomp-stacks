@@ -286,6 +286,68 @@ export class ConnectModal extends LitElement {
         transform: translate(2px, 2px);
         box-shadow: 1px 1px 0 var(--ink);
       }
+      .tools-panel {
+        background: var(--paper);
+        border-bottom: 2px solid var(--ink);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        animation: sheetIn 200ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      .tools-header {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .guided-steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        opacity: 0.8;
+      }
+      .guided-steps li {
+        margin-bottom: 6px;
+        display: flex;
+        gap: 8px;
+      }
+      .step-num {
+        font-weight: 600;
+        color: var(--mustard);
+      }
+      .guided-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      .channel-select {
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        outline: none;
+        cursor: pointer;
+      }
+      .btn-send {
+        padding: 8px 16px;
+        border-radius: 16px;
+        background: var(--sky);
+        border: 2.5px solid var(--ink);
+        box-shadow: 2px 2px 0 var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+        transition: transform 100ms, box-shadow 100ms;
+      }
+      .btn-send:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--ink);
+      }
     `,
   ];
 
@@ -350,6 +412,9 @@ export class ConnectModal extends LitElement {
                 const on = !!st.conn[r.id];
                 const listening = st.listening === r.id;
                 const dotBg = on ? (r.id === 'scribble' ? '#8fd0e6' : DEVICES[r.id]?.accent || '#8fd0e6') : 'transparent';
+                const isPedal = r.id !== 'scribble' && r.id !== st.controllerId;
+                const toolsOpen = st.channelToolOpen === r.id;
+
                 return html`
                   <div class="dev-row">
                     <span class="dev-dot" style="background:${dotBg}"></span>
@@ -378,6 +443,13 @@ export class ConnectModal extends LitElement {
                           </button>
                         `
                       : null}
+                    ${isPedal 
+                      ? html`
+                          <button class="btn-action" style="background: ${toolsOpen ? 'var(--mustard)' : 'var(--card)'}" @click=${() => this.store.toggleChannelTool(r.id)}>
+                            tools
+                          </button>
+                        ` 
+                      : null}
                     <button
                       class="btn-toggle"
                       ?on=${on}
@@ -386,6 +458,33 @@ export class ConnectModal extends LitElement {
                       ${on ? 'drop' : 'connect'}
                     </button>
                   </div>
+                  ${toolsOpen ? html`
+                    <div class="tools-panel">
+                      <div class="tools-header">Guided Channel Setup</div>
+                      <ol class="guided-steps">
+                        <li><span class="step-num">1.</span> Unplug power from the pedal.</li>
+                        <li><span class="step-num">2.</span> Hold down both footswitches.</li>
+                        <li><span class="step-num">3.</span> Plug power back in while holding.</li>
+                        <li><span class="step-num">4.</span> Wait for the LEDs to indicate channel setup mode.</li>
+                        <li><span class="step-num">5.</span> Pick a channel and send a PC message.</li>
+                      </ol>
+                      <div class="guided-controls">
+                        <select class="channel-select" id="channel-select-${r.id}" .value=${(st.channels[r.id] || 1).toString()}>
+                          ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
+                            <option value=${ch}>Channel ${ch}</option>
+                          `)}
+                        </select>
+                        <button class="btn-send" @click=${() => {
+                          const select = this.shadowRoot?.querySelector<HTMLSelectElement>(`#channel-select-${r.id}`);
+                          if (select) {
+                            this.store.sendGuidedPC(r.id, parseInt(select.value, 10));
+                          }
+                        }}>
+                          Send PC Message
+                        </button>
+                      </div>
+                    </div>
+                  ` : null}
                 `;
               })}
             </div>

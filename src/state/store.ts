@@ -56,6 +56,8 @@ function initialState(controllerId: string): StompState {
     monitorOn: false,
     log: [],
     seq: 0,
+    channelToolOpen: null,
+    channelGuidedStep: 0,
   };
 }
 
@@ -108,6 +110,36 @@ export class StompStore extends EventTarget {
   setPedalChannel(id: string, channel: number) {
     const channels = { ...this.state.channels, [id]: channel };
     this.set({ channels, channelPickerOpen: false });
+  }
+
+  toggleChannelTool(id: string) {
+    this.set({
+      channelToolOpen: this.state.channelToolOpen === id ? null : id,
+      channelGuidedStep: 0
+    });
+  }
+
+  setGuidedStep(step: number) {
+    this.set({ channelGuidedStep: step });
+  }
+
+  sendGuidedPC(id: string, channel: number) {
+    // Send Program Change message for channel set (channel, PC 0)
+    midiService.sendProgramChange(channel, 0);
+    
+    // Update the app state with the new channel
+    const channels = { ...this.state.channels, [id]: channel };
+    this.set({ 
+      channels, 
+      channelToolOpen: null,
+      channelGuidedStep: 0 
+    });
+    
+    this.pushLog({
+      text: `sent program change 0 on ch ${channel}`,
+      sub: `guided set completed for ${id}`,
+      tone: 'out'
+    });
   }
 
   toggleChannelPicker() {
