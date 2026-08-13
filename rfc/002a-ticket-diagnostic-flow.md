@@ -1,6 +1,7 @@
 # Ticket 1: Design the Diagnostic & Set Flow
 
 **Type:** `wayfinder:prototype` (HITL)
+**Status:** Resolved
 
 ## Question
 
@@ -15,14 +16,10 @@ Based on research, setting a channel on a Chase Bliss pedal requires a manual ha
 
 **How should we build the UX in the debugging panel to solve the user's friction?**
 
-### Potential Options:
+## Decision
 
-1. **The "Guided Set" Flow:**
-   Instead of trying to *find* the channel, we just guide them to *reset* it. We add a button in the debugging panel: "Set MIDI Channel". When clicked, it shows the 5 hardware steps above, and provides a big "Send PC Message" button to execute step 5.
-   
-2. **The "Channel Sweeper" (Discovery) Flow:**
-   If the user just wants to know what channel it's currently on, we could build a "Find My Pedal" tool. It sends a safe, visible CC message (like toggling bypass) on Channel 1, then Channel 2, etc., highlighting the current channel in the UI. The user clicks "Stop" when they see their physical pedal react.
+**Option 3: Both**
 
-3. **Both?**
-
-Which direction should we take for the UI prototype?
+We will build both tools into the debugging panel:
+1. **The "Channel Sweeper" (Discovery) Flow:** A tool that sends a safe, visible CC message (like toggling bypass) across channels 1-16. It will highlight the current channel being tested, and the user can stop the sweep when they see their physical pedal react.
+2. **The "Guided Set" Flow:** A wizard-like flow that walks the user through the 5 hardware steps to manually re-assign the pedal's MIDI channel, providing a button to send the final PC message on the newly desired channel.
