@@ -440,14 +440,28 @@ export class DeviceTabs extends LitElement {
   @state() private targetSwitchKey: string | null = null;
   @state() private assignedConfirmation: { channel: number; switchKey: string } | null = null;
 
+  private onWindowPointerDown = (e: PointerEvent) => {
+    if (!this.store?.state?.channelPickerOpen) return;
+    const path = e.composedPath();
+    const isInside = path.some(
+      (el) => el instanceof HTMLElement && (el.classList.contains('chan-popover') || el.classList.contains('chan-btn'))
+    );
+    if (!isInside) {
+      this.resetHelp();
+      this.store.set({ channelPickerOpen: false });
+    }
+  };
+
   connectedCallback() {
     super.connectedCallback();
     this.storeController ??= new StoreController(this, this.store);
+    window.addEventListener('pointerdown', this.onWindowPointerDown);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.stopSweep();
+    window.removeEventListener('pointerdown', this.onWindowPointerDown);
   }
 
   updated() {
