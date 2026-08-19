@@ -347,12 +347,49 @@ export class DeviceTabs extends LitElement {
         font-size: 11.5px;
         font-weight: 700;
         cursor: pointer;
-        transition: transform 100ms, box-shadow 100ms;
+        transition: transform 100ms, box-shadow 100ms, background 150ms;
         text-align: center;
+      }
+      .btn-assign-switch[confirmed] {
+        background: #51cf66;
+        color: var(--ink);
       }
       .btn-assign-switch:active {
         transform: translate(1px, 1px);
         box-shadow: 0 0 0 var(--ink);
+      }
+      .assigned-banner {
+        margin-top: 5px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #51cf6626;
+        border: 1.5px solid #2b8a3e;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #2b8a3e;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .btn-done {
+        width: 100%;
+        margin-top: 10px;
+        padding: 7px 12px;
+        border-radius: 11px;
+        background: var(--ink);
+        color: var(--paper);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 100ms, opacity 100ms;
+        text-align: center;
+      }
+      .btn-done:hover {
+        opacity: 0.9;
+      }
+      .btn-done:active {
+        transform: scale(0.98);
       }
       .direct-footer {
         display: flex;
@@ -401,6 +438,7 @@ export class DeviceTabs extends LitElement {
   @state() private sweepChannel: number = 1;
   @state() private sweepTimer: number | null = null;
   @state() private targetSwitchKey: string | null = null;
+  @state() private assignedConfirmation: { channel: number; switchKey: string } | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -419,11 +457,13 @@ export class DeviceTabs extends LitElement {
   }
 
   private resetHelp() {
-    this.helpView = 'none';
     this.stopSweep();
+    this.helpView = 'none';
+    this.assignedConfirmation = null;
   }
 
   private startSweep() {
+    this.stopSweep();
     this.helpView = 'sweep';
     this.sweepChannel = 1;
     this.store.sendTestCC(this.sweepChannel);
@@ -450,6 +490,7 @@ export class DeviceTabs extends LitElement {
     const effectiveSwitch = this.targetSwitchKey && availableKeys.includes(this.targetSwitchKey)
       ? this.targetSwitchKey
       : st.selectedKey;
+    const isAssigned = !!this.assignedConfirmation && this.assignedConfirmation.switchKey === effectiveSwitch;
 
     return html`
       <div class="wrap">
@@ -490,7 +531,13 @@ export class DeviceTabs extends LitElement {
           class="chan-btn"
           title="midi channel for this pedal"
           style=${st.channelPickerOpen ? 'background:var(--mustard)' : 'background:var(--card)'}
-          @click=${() => this.store.toggleChannelPicker()}
+          @click=${() => {
+            if (!st.channelPickerOpen) {
+              this.helpView = 'none';
+              this.assignedConfirmation = null;
+            }
+            this.store.toggleChannelPicker();
+          }}
         >
           <span style="font-family:var(--mono);font-size:11px">ch ${currentChannel}</span>
           <span style="font-size:10px;opacity:.55">⚙</span>
@@ -568,7 +615,7 @@ export class DeviceTabs extends LitElement {
                               <span class="picker-label">Target Channel</span>
                               <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
                                 ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
-                                  <option value=${ch}>Ch ${ch}</option>
+                                  <option value=${ch} ?selected=${ch === currentChannel}>Ch ${ch}</option>
                                 `)}
                               </select>
                             </div>
@@ -578,22 +625,34 @@ export class DeviceTabs extends LitElement {
                                   this.targetSwitchKey = (e.target as HTMLSelectElement).value;
                                 }}>
                                 ${availableKeys.map(k => html`
-                                  <option value=${k}>Switch ${k}</option>
+                                  <option value=${k} ?selected=${k === effectiveSwitch}>Switch ${k}</option>
                                 `)}
                               </select>
                             </div>
                           </div>
-                          <button class="btn-assign-switch" @click=${() => {
-                            const chanSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
-                            const swSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-switch-select');
-                            const ch = chanSelect ? parseInt(chanSelect.value, 10) : currentChannel;
-                            const sw = swSelect ? swSelect.value : effectiveSwitch;
-                            this.store.assignGuidedPC(active, ch, sw);
-                            this.helpView = 'none';
-                            this.store.toggleChannelPicker();
-                          }}>
-                            Assign Learn (PC 0) to Switch ${effectiveSwitch}
+                          <button
+                            class="btn-assign-switch"
+                            ?confirmed=${isAssigned}
+                            @click=${() => {
+                              const chanSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
+                              const swSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-switch-select');
+                              const ch = chanSelect ? parseInt(chanSelect.value, 10) : currentChannel;
+                              const sw = swSelect ? swSelect.value : effectiveSwitch;
+                              this.store.assignGuidedPC(active, ch, sw);
+                              this.assignedConfirmation = { channel: ch, switchKey: sw };
+                            }}
+                          >
+                            ${isAssigned
+                              ? `✓ Assigned PC 0 to Switch ${effectiveSwitch}`
+                              : `Assign Learn (PC 0) to Switch ${effectiveSwitch}`}
                           </button>
+                          ${isAssigned
+                            ? html`
+                                <div class="assigned-banner">
+                                  <span>✓ Ready! Switch ${effectiveSwitch} now has PC 0 on Ch ${this.assignedConfirmation!.channel}.</span>
+                                </div>
+                              `
+                            : null}
                         </div>
                         <span class="step-detail-dim">Puts a temporary setup message on Switch ${effectiveSwitch}.</span>
                       </div>
@@ -610,6 +669,16 @@ export class DeviceTabs extends LitElement {
                       </div>
                     </li>
                   </ol>
+
+                  <button
+                    class="btn-done"
+                    @click=${() => {
+                      this.resetHelp();
+                      this.store.toggleChannelPicker();
+                    }}
+                  >
+                    Done
+                  </button>
 
                   <div class="direct-footer">
                     <span class="direct-label">Direct cable to pedal?</span>
