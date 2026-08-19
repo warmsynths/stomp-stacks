@@ -448,7 +448,7 @@ export class DeviceTabs extends LitElement {
     );
     if (!isInside) {
       this.resetHelp();
-      this.store.set({ channelPickerOpen: false });
+      this.store.closeChannelPicker();
     }
   };
 

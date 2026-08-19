@@ -180,6 +180,14 @@ export class StompStore extends EventTarget {
     this.set({ channelPickerOpen: !this.state.channelPickerOpen });
   }
 
+  openChannelPicker() {
+    this.set({ channelPickerOpen: true });
+  }
+
+  closeChannelPicker() {
+    this.set({ channelPickerOpen: false });
+  }
+
   setBrain(id: string) {
     this.set({ brainId: id, brainPickerOpen: false });
   }
