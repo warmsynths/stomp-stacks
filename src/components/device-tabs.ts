@@ -133,7 +133,7 @@ export class DeviceTabs extends LitElement {
         position: absolute;
         right: 0;
         top: calc(100% + 4px);
-        width: 288px;
+        width: 320px;
         max-width: calc(100vw - 28px);
         padding: 14px;
         border-radius: 20px;
@@ -234,87 +234,115 @@ export class DeviceTabs extends LitElement {
       .guided-steps {
         list-style: none;
         padding: 0;
-        margin: 0;
-        font-size: 12.5px;
-        line-height: 1.5;
-        opacity: 0.8;
-      }
-      .guided-steps li {
-        margin-bottom: 8px;
+        margin: 10px 0 12px;
         display: flex;
-        gap: 8px;
+        flex-direction: column;
+        gap: 11px;
       }
-      .step-num {
-        font-weight: 600;
-        color: var(--mustard);
+      .step-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
       }
-      .temp-notice {
-        margin-bottom: 12px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        background: #f7c94826;
+      .step-badge {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--mustard);
         border: 1.5px solid var(--ink);
-        font-size: 11px;
-        line-height: 1.45;
         color: var(--ink);
-      }
-      .guided-controls {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin-top: 14px;
+        justify-content: center;
+        margin-top: 1px;
+      }
+      .step-body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .step-heading {
+        font-weight: 600;
+        font-size: 12px;
+        color: var(--ink);
+      }
+      .step-detail {
+        font-size: 11px;
+        line-height: 1.4;
+        opacity: 0.8;
+      }
+      .step-detail-dim {
+        font-size: 10.5px;
+        line-height: 1.35;
+        opacity: 0.65;
+        font-style: italic;
+        margin-top: 2px;
+      }
+      .step-action-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
       }
       .channel-select {
-        padding: 6px 10px;
+        padding: 5px 8px;
         border-radius: 10px;
         border: 2px solid var(--ink);
         background: var(--card);
-        font-family: inherit;
-        font-size: 13px;
-        font-weight: 600;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
         outline: none;
         cursor: pointer;
       }
-      .btn-send {
+      .btn-assign-switch {
         flex: 1;
-        padding: 8px 12px;
-        border-radius: 12px;
+        padding: 6px 10px;
+        border-radius: 10px;
         background: var(--mustard);
         border: 2px solid var(--ink);
         box-shadow: 2px 2px 0 var(--ink);
-        font-size: 12px;
+        font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
         transition: transform 100ms, box-shadow 100ms;
+        white-space: nowrap;
+        text-align: center;
       }
-      .btn-send:active {
-        transform: translate(2px, 2px);
+      .btn-assign-switch:active {
+        transform: translate(1px, 1px);
         box-shadow: 0 0 0 var(--ink);
       }
-      .btn-direct {
-        padding: 6px 10px;
-        border-radius: 10px;
+      .direct-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px dashed rgba(22, 50, 61, 0.2);
+      }
+      .direct-label {
+        font-size: 10.5px;
+        opacity: 0.65;
+      }
+      .btn-direct-link {
+        padding: 4px 8px;
+        border-radius: 8px;
         background: var(--card);
         border: 1.5px solid var(--ink);
-        font-size: 11px;
-        font-weight: 500;
+        font-size: 10.5px;
+        font-weight: 600;
         cursor: pointer;
         transition: background 120ms;
       }
-      .btn-direct:hover {
+      .btn-direct-link:hover {
         background: var(--panel-warm);
-      }
-      .guide-status {
-        margin-top: 10px;
-        padding: 7px 10px;
-        border-radius: 10px;
-        background: #f7c94833;
-        border: 1.5px solid var(--ink);
-        font-size: 11px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 6px;
       }
       .back-btn {
         display: inline-flex;
@@ -468,41 +496,54 @@ export class DeviceTabs extends LitElement {
                   </div>
                 ` : this.helpView === 'guide' ? html`
                   <button class="reset back-btn" @click=${() => (this.helpView = 'menu')}>← back</button>
-                  <div class="pop-title">guided channel learn</div>
-                  <div class="pop-sub" style="margin-bottom:10px">teach ${currentDevice?.name || 'this pedal'} its MIDI channel using your controller.</div>
-
-                  <div class="temp-notice">
-                    ℹ️ <strong>Temporary Setup Helper:</strong> This temporarily puts a Channel Learn message (PC 0) onto <strong>Switch ${st.selectedKey}</strong> so stepping on that physical footswitch broadcasts the learn signal. You can remove or replace it once your pedal locks in the channel.
-                  </div>
+                  <div class="pop-title">Set Pedal Channel</div>
+                  <div class="pop-sub">Teach ${currentDevice?.name || 'this pedal'} which MIDI channel to listen on.</div>
 
                   <ol class="guided-steps">
-                    <li><span class="step-num">1.</span> Unplug pedal power, hold footswitches, and reconnect power to enter Learn mode.</li>
-                    <li><span class="step-num">2.</span> Choose target channel below and click <strong>Assign to Active Switch</strong>.</li>
-                    <li><span class="step-num">3.</span> Compile/export to your controller, then tap physical <strong>Switch ${st.selectedKey}</strong> on your board to lock in the channel.</li>
+                    <li class="step-item">
+                      <span class="step-badge">1</span>
+                      <div class="step-body">
+                        <span class="step-heading">Enter Learn Mode</span>
+                        <span class="step-detail">Unplug pedal power, hold footswitches down, and reconnect power.</span>
+                      </div>
+                    </li>
+                    <li class="step-item">
+                      <span class="step-badge">2</span>
+                      <div class="step-body">
+                        <span class="step-heading">Set & Assign Channel</span>
+                        <div class="step-action-row">
+                          <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
+                            ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
+                              <option value=${ch}>Ch ${ch}</option>
+                            `)}
+                          </select>
+                          <button class="btn-assign-switch" @click=${() => {
+                            const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
+                            if (select) {
+                              const ch = parseInt(select.value, 10);
+                              this.store.assignGuidedPC(active, ch);
+                              this.helpView = 'none';
+                              this.store.toggleChannelPicker();
+                            }
+                          }}>
+                            Assign to Switch ${st.selectedKey}
+                          </button>
+                        </div>
+                        <span class="step-detail-dim">Temporarily loads a learn command onto Switch ${st.selectedKey}.</span>
+                      </div>
+                    </li>
+                    <li class="step-item">
+                      <span class="step-badge">3</span>
+                      <div class="step-body">
+                        <span class="step-heading">Compile & Tap</span>
+                        <span class="step-detail">Compile/export to your controller, then tap physical <strong>Switch ${st.selectedKey}</strong> to lock in the channel.</span>
+                      </div>
+                    </li>
                   </ol>
 
-                  <div class="guided-controls">
-                    <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
-                      ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
-                        <option value=${ch}>Channel ${ch}</option>
-                      `)}
-                    </select>
-                    <button class="btn-send" @click=${() => {
-                      const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
-                      if (select) {
-                        const ch = parseInt(select.value, 10);
-                        this.store.assignGuidedPC(active, ch);
-                        this.helpView = 'none';
-                        this.store.toggleChannelPicker();
-                      }
-                    }}>
-                      Assign to Active Switch (${st.selectedKey})
-                    </button>
-                  </div>
-
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px dashed rgba(22,50,61,0.2)">
-                    <span style="font-size:10.5px;opacity:0.65">Direct USB/BLE cable attached?</span>
-                    <button class="btn-direct" @click=${() => {
+                  <div class="direct-footer">
+                    <span class="direct-label">Direct cable to pedal?</span>
+                    <button class="btn-direct-link" @click=${() => {
                       const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
                       const ch = select ? parseInt(select.value, 10) : currentChannel;
                       this.store.sendDirectPC(ch, 0);
