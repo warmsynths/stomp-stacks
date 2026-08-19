@@ -248,6 +248,16 @@ export class DeviceTabs extends LitElement {
         font-weight: 600;
         color: var(--mustard);
       }
+      .temp-notice {
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f7c94826;
+        border: 1.5px solid var(--ink);
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--ink);
+      }
       .guided-controls {
         display: flex;
         align-items: center;
@@ -459,12 +469,16 @@ export class DeviceTabs extends LitElement {
                 ` : this.helpView === 'guide' ? html`
                   <button class="reset back-btn" @click=${() => (this.helpView = 'menu')}>← back</button>
                   <div class="pop-title">guided channel learn</div>
-                  <div class="pop-sub" style="margin-bottom:12px">program ${currentDevice?.name || 'this pedal'} via your MIDI controller.</div>
+                  <div class="pop-sub" style="margin-bottom:10px">teach ${currentDevice?.name || 'this pedal'} its MIDI channel using your controller.</div>
+
+                  <div class="temp-notice">
+                    ℹ️ <strong>Temporary Setup Helper:</strong> This temporarily puts a Channel Learn message (PC 0) onto <strong>Switch ${st.selectedKey}</strong> so stepping on that physical footswitch broadcasts the learn signal. You can remove or replace it once your pedal locks in the channel.
+                  </div>
 
                   <ol class="guided-steps">
                     <li><span class="step-num">1.</span> Unplug pedal power, hold footswitches, and reconnect power to enter Learn mode.</li>
-                    <li><span class="step-num">2.</span> Assign PC 0 below, then compile/export the rig to your controller.</li>
-                    <li><span class="step-num">3.</span> Tap physical footswitch <strong>[Switch ${st.selectedKey}]</strong> on your board to lock in the channel.</li>
+                    <li><span class="step-num">2.</span> Choose target channel below and click <strong>Assign to Active Switch</strong>.</li>
+                    <li><span class="step-num">3.</span> Compile/export to your controller, then tap physical <strong>Switch ${st.selectedKey}</strong> on your board to lock in the channel.</li>
                   </ol>
 
                   <div class="guided-controls">

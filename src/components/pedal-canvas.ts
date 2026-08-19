@@ -99,44 +99,6 @@ export class PedalCanvas extends LitElement {
         align-items: center;
         justify-content: center;
       }
-      .pc-preset-pill {
-        position: absolute;
-        top: 8px;
-        right: 10px;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        padding: 4px 8px;
-        border-radius: 12px;
-        background: #fffbf0;
-        border: 2px solid var(--ink);
-        box-shadow: 2px 2px 0 var(--ink);
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--ink);
-        cursor: pointer;
-        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background 150ms, box-shadow 150ms;
-      }
-      .pc-preset-pill:hover {
-        background: var(--mustard);
-      }
-      .pc-preset-pill[active] {
-        background: var(--mustard);
-        box-shadow: 0 0 0 3px #f7c94866, 2px 2px 0 var(--ink);
-      }
-      .pc-pill-tag {
-        padding: 1px 4px;
-        border-radius: 6px;
-        background: var(--ink);
-        color: var(--paper);
-        font-size: 9px;
-      }
-      .pc-pill-label {
-        font-size: 10.5px;
-        letter-spacing: -0.01em;
-      }
     `,
   ];
 
@@ -156,13 +118,6 @@ export class PedalCanvas extends LitElement {
     const device = HardwareRegistry.getDevice(st.browseDevice)!;
     const drawn = st.face === 'drawn';
     const list = this.store.activeStack;
-
-    const pcHits: number[] = [];
-    list.forEach((s, i) => {
-      if (s.device === device.id && s.control === 'pc') pcHits.push(i + 1);
-    });
-    const pcUsed = pcHits.length > 0;
-    const isPcOpen = st.popoverControlId === 'pc';
 
     const stageStyle: Record<string, string> = {
       aspectRatio: drawn ? '344/426' : `${device.pw}/${device.ph}`,
@@ -191,16 +146,6 @@ export class PedalCanvas extends LitElement {
                 <div class="brand" style="color:${device.ink}">${device.faceName}</div>
               `
             : html`<img class="face-photo" src=${device.photo} alt=${device.faceName} />`}
-          <button
-            class="pc-preset-pill"
-            ?active=${isPcOpen || pcUsed}
-            title="Recall preset (Program Change PC 0–127)"
-            @click=${() => this.store.openPresetPopover(device.id)}
-          >
-            <span class="pc-pill-tag">PC</span>
-            <span class="pc-pill-label">${pcUsed ? `PRESET ${list.find((s) => s.device === device.id && s.control === 'pc')?.value ?? 0}` : 'PRESET'}</span>
-            ${pcUsed ? html`<span class="badge" style="position:static;min-width:18px;height:18px;font-size:10px">${pcHits.join(',')}</span>` : null}
-          </button>
           ${device.controls.map((c) => this.renderControl(c, device, drawn, list, st.popoverControlId))}
         </div>
       </div>
