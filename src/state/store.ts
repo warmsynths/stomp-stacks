@@ -120,20 +120,22 @@ export class StompStore extends EventTarget {
     });
   }
 
-  assignGuidedPC(id: string, channel: number) {
-    const { banks, bank, selectedKey, action } = this.state;
-    const updatedBanks = MacroStackModel.assignGuidedPCStep(banks, bank, selectedKey, action, id, channel, MAX_STEPS);
+  assignGuidedPC(id: string, channel: number, targetKey?: string) {
+    const { banks, bank, action } = this.state;
+    const switchKey = targetKey || this.state.selectedKey;
+    const updatedBanks = MacroStackModel.assignGuidedPCStep(banks, bank, switchKey, action, id, channel, MAX_STEPS);
     const channels = { ...this.state.channels, [id]: channel };
 
     this.set({
       banks: updatedBanks,
       channels,
+      selectedKey: switchKey,
     });
 
     const dev = HardwareRegistry.getDevice(id);
     this.pushLog({
       text: `assigned PC 0 on ch ${channel} for ${dev?.name || id}`,
-      sub: `Switch ${selectedKey} (${action}) · controller-mediated learn`,
+      sub: `Switch ${switchKey} (${action}) · temporary channel learn`,
       tone: 'ok',
     });
   }

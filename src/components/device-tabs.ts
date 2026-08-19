@@ -231,6 +231,24 @@ export class DeviceTabs extends LitElement {
         text-align: center;
         text-wrap: pretty;
       }
+      .learn-why-box {
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f7c94822;
+        border: 1.5px solid var(--ink);
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--ink);
+      }
+      .learn-why-title {
+        font-weight: 700;
+        font-size: 11px;
+        margin-bottom: 3px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
       .guided-steps {
         list-style: none;
         padding: 0;
@@ -274,23 +292,41 @@ export class DeviceTabs extends LitElement {
       }
       .step-detail {
         font-size: 11px;
-        line-height: 1.4;
-        opacity: 0.8;
+        line-height: 1.45;
+        opacity: 0.85;
       }
       .step-detail-dim {
         font-size: 10.5px;
         line-height: 1.35;
         opacity: 0.65;
         font-style: italic;
-        margin-top: 2px;
+        margin-top: 3px;
       }
-      .step-action-row {
+      .step-action-grid {
         display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 4px;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 5px;
+      }
+      .step-pickers-row {
+        display: flex;
+        gap: 6px;
+      }
+      .picker-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .picker-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.6;
+        margin-bottom: 2px;
       }
       .channel-select {
+        width: 100%;
         padding: 5px 8px;
         border-radius: 10px;
         border: 2px solid var(--ink);
@@ -302,17 +338,16 @@ export class DeviceTabs extends LitElement {
         cursor: pointer;
       }
       .btn-assign-switch {
-        flex: 1;
-        padding: 6px 10px;
+        width: 100%;
+        padding: 7px 10px;
         border-radius: 10px;
         background: var(--mustard);
         border: 2px solid var(--ink);
         box-shadow: 2px 2px 0 var(--ink);
         font-size: 11.5px;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
         transition: transform 100ms, box-shadow 100ms;
-        white-space: nowrap;
         text-align: center;
       }
       .btn-assign-switch:active {
@@ -364,11 +399,17 @@ export class DeviceTabs extends LitElement {
 
   @state() private helpView: 'none' | 'menu' | 'sweep' | 'guide' = 'none';
   @state() private sweepChannel: number = 1;
-  private sweepInterval: any = null;
+  @state() private sweepTimer: number | null = null;
+  @state() private targetSwitchKey: string | null = null;
 
   connectedCallback() {
     super.connectedCallback();
     this.storeController ??= new StoreController(this, this.store);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.stopSweep();
   }
 
   updated() {
@@ -386,16 +427,16 @@ export class DeviceTabs extends LitElement {
     this.helpView = 'sweep';
     this.sweepChannel = 1;
     this.store.sendTestCC(this.sweepChannel);
-    this.sweepInterval = setInterval(() => {
+    this.sweepTimer = window.setInterval(() => {
       this.sweepChannel = this.sweepChannel < 16 ? this.sweepChannel + 1 : 1;
       this.store.sendTestCC(this.sweepChannel);
     }, 700);
   }
 
   private stopSweep() {
-    if (this.sweepInterval) {
-      clearInterval(this.sweepInterval);
-      this.sweepInterval = null;
+    if (this.sweepTimer !== null) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
     }
   }
 
@@ -404,6 +445,11 @@ export class DeviceTabs extends LitElement {
     const active = st.browseDevice;
     const currentDevice = HardwareRegistry.getDevice(active);
     const currentChannel = st.channels[active] || (currentDevice ? currentDevice.midiChannel : 1);
+    const controller = HardwareRegistry.getController(st.controllerId);
+    const availableKeys = controller?.keys || ['A', 'B', 'C', 'D'];
+    const effectiveSwitch = this.targetSwitchKey && availableKeys.includes(this.targetSwitchKey)
+      ? this.targetSwitchKey
+      : st.selectedKey;
 
     return html`
       <div class="wrap">
@@ -497,46 +543,70 @@ export class DeviceTabs extends LitElement {
                 ` : this.helpView === 'guide' ? html`
                   <button class="reset back-btn" @click=${() => (this.helpView = 'menu')}>← back</button>
                   <div class="pop-title">Set Pedal Channel</div>
-                  <div class="pop-sub">Teach ${currentDevice?.name || 'this pedal'} which MIDI channel to listen on.</div>
+                  <div class="pop-sub" style="margin-bottom:8px">Teach ${currentDevice?.name || 'this pedal'} which MIDI channel to listen on.</div>
+
+                  <div class="learn-why-box">
+                    <div class="learn-why-title">💡 How Pedal Channel Learn Works</div>
+                    Pedals like Chase Bliss don't have channel DIP switches. They boot into <strong>Learn Mode</strong> and permanently adopt the channel of the first Program Change (PC) message they receive.
+                  </div>
 
                   <ol class="guided-steps">
                     <li class="step-item">
                       <span class="step-badge">1</span>
                       <div class="step-body">
                         <span class="step-heading">Enter Learn Mode</span>
-                        <span class="step-detail">Unplug pedal power, hold footswitches down, and reconnect power.</span>
+                        <span class="step-detail">Unplug pedal power, hold footswitches down, and reconnect power until LEDs blink.</span>
                       </div>
                     </li>
                     <li class="step-item">
                       <span class="step-badge">2</span>
                       <div class="step-body">
-                        <span class="step-heading">Set & Assign Channel</span>
-                        <div class="step-action-row">
-                          <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
-                            ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
-                              <option value=${ch}>Ch ${ch}</option>
-                            `)}
-                          </select>
+                        <span class="step-heading">Choose Channel & Switch</span>
+                        <div class="step-action-grid">
+                          <div class="step-pickers-row">
+                            <div class="picker-col">
+                              <span class="picker-label">Target Channel</span>
+                              <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
+                                ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
+                                  <option value=${ch}>Ch ${ch}</option>
+                                `)}
+                              </select>
+                            </div>
+                            <div class="picker-col">
+                              <span class="picker-label">Controller Switch</span>
+                              <select class="channel-select" id="guided-switch-select" .value=${effectiveSwitch} @change=${(e: Event) => {
+                                  this.targetSwitchKey = (e.target as HTMLSelectElement).value;
+                                }}>
+                                ${availableKeys.map(k => html`
+                                  <option value=${k}>Switch ${k}</option>
+                                `)}
+                              </select>
+                            </div>
+                          </div>
                           <button class="btn-assign-switch" @click=${() => {
-                            const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
-                            if (select) {
-                              const ch = parseInt(select.value, 10);
-                              this.store.assignGuidedPC(active, ch);
-                              this.helpView = 'none';
-                              this.store.toggleChannelPicker();
-                            }
+                            const chanSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
+                            const swSelect = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-switch-select');
+                            const ch = chanSelect ? parseInt(chanSelect.value, 10) : currentChannel;
+                            const sw = swSelect ? swSelect.value : effectiveSwitch;
+                            this.store.assignGuidedPC(active, ch, sw);
+                            this.helpView = 'none';
+                            this.store.toggleChannelPicker();
                           }}>
-                            Assign to Switch ${st.selectedKey}
+                            Assign Learn (PC 0) to Switch ${effectiveSwitch}
                           </button>
                         </div>
-                        <span class="step-detail-dim">Temporarily loads a learn command onto Switch ${st.selectedKey}.</span>
+                        <span class="step-detail-dim">Puts a temporary setup message on Switch ${effectiveSwitch}.</span>
                       </div>
                     </li>
                     <li class="step-item">
                       <span class="step-badge">3</span>
                       <div class="step-body">
-                        <span class="step-heading">Compile & Tap</span>
-                        <span class="step-detail">Compile/export to your controller, then tap physical <strong>Switch ${st.selectedKey}</strong> to lock in the channel.</span>
+                        <span class="step-heading">Export, Tap & Clean Up</span>
+                        <span class="step-detail">
+                          1. Export/compile rig to your controller.<br>
+                          2. Tap physical <strong>Switch ${effectiveSwitch}</strong> on your board to lock in the channel.<br>
+                          3. <strong>Delete or overwrite Switch ${effectiveSwitch}</strong> afterward.
+                        </span>
                       </div>
                     </li>
                   </ol>
