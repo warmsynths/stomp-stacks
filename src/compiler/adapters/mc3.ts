@@ -5,6 +5,7 @@ import { MAX_VALUE } from '../../data/devices.js';
 import type { TargetAdapter, TargetExportFile, CompileLine } from './types.js';
 
 const CC_STATUS_BASE = 0xb0;
+const PC_STATUS_BASE = 0xc0;
 
 export interface CompiledMessage {
   statusByte: number;
@@ -26,8 +27,29 @@ export interface DescribedStep {
 
 export function describeStep(step: MacroStep, channels?: Record<string, number>): DescribedStep {
   const device = HardwareRegistry.getDevice(step.device);
-  const control = HardwareRegistry.getControl(step.device, step.control);
+  const isPc = step.control === 'pc' || step.control === '__pc__';
+  const control = isPc ? null : HardwareRegistry.getControl(step.device, step.control);
   const channel = channels && channels[step.device] ? channels[step.device] : device?.midiChannel || 1;
+
+  if (isPc) {
+    const value = step.value ?? 0;
+    const stepLabel = step.label || `PC ${value}`;
+    const label = step.label ? `Preset ${value} · ${step.label}` : `Preset ${value} · PC ${value}`;
+    const statusByte = PC_STATUS_BASE + (channel - 1);
+
+    return {
+      label,
+      stepLabel,
+      deviceId: device?.id || step.device,
+      deviceName: device?.name || step.device,
+      accent: device?.accent || '#ffffff',
+      channel,
+      cc: 0,
+      value,
+      message: { statusByte, dataByte1: value, dataByte2: 0 },
+    };
+  }
+
   const value = step.value ?? MAX_VALUE;
 
   let stepLabel = step.label || '';
@@ -86,6 +108,15 @@ export function compileMc3Json(state: StompState) {
         if (list.length) {
           acts[NAME_MAP[a.id]] = list.slice(0, 6).map((s) => {
             const d = describeStep(s, state.channels);
+            const isPc = s.control === 'pc' || s.control === '__pc__';
+            if (isPc) {
+              return {
+                type: 'Program Change',
+                channel: d.channel,
+                number: d.value,
+                label: d.stepLabel || d.label,
+              };
+            }
             return {
               type: 'Control Change',
               channel: d.channel,

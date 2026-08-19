@@ -86,6 +86,62 @@ export class MacroStackModel {
     return next;
   }
 
+  static addOrUpdatePCStep(
+    banks: Bank[],
+    bankIndex: number,
+    switchKey: string,
+    action: ActionId,
+    device: string,
+    program: number,
+    label?: string,
+    maxSteps: number = DEFAULT_MAX_STEPS,
+  ): Bank[] {
+    const next = MacroStackModel.cloneBanks(banks);
+    const list = next[bankIndex][switchKey][action];
+    const at = list.findIndex((s) => s.device === device && s.control === 'pc' && s.value === program);
+
+    if (at >= 0) {
+      list.splice(at, 1);
+      return next;
+    }
+
+    if (list.length >= maxSteps) return next;
+
+    list.push({ device, control: 'pc', value: program, label: label || `PRESET ${program}` });
+    return next;
+  }
+
+  static assignGuidedPCStep(
+    banks: Bank[],
+    bankIndex: number,
+    switchKey: string,
+    action: ActionId,
+    device: string,
+    channel: number,
+    maxSteps: number = DEFAULT_MAX_STEPS,
+  ): Bank[] {
+    const next = MacroStackModel.cloneBanks(banks);
+    const list = next[bankIndex][switchKey][action];
+
+    const existingIndex = list.findIndex((s) => s.device === device && s.control === 'pc');
+    const pcStep: MacroStep = {
+      device,
+      control: 'pc',
+      value: 0,
+      label: `LEARN CH ${channel}`,
+    };
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = pcStep;
+    } else {
+      if (list.length < maxSteps) {
+        list.push(pcStep);
+      }
+    }
+
+    return next;
+  }
+
   static removeStep(banks: Bank[], bankIndex: number, switchKey: string, action: ActionId, stepIndex: number): Bank[] {
     const next = MacroStackModel.cloneBanks(banks);
     const list = next[bankIndex][switchKey][action];

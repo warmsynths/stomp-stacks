@@ -120,19 +120,58 @@ export class StompStore extends EventTarget {
     });
   }
 
-  sendGuidedPC(id: string, channel: number) {
-    // Send Program Change message for channel set (channel, PC 0)
-    midiService.sendProgramChange(channel, 0);
-    
-    // Update the app state with the new channel
+  assignGuidedPC(id: string, channel: number) {
+    const { banks, bank, selectedKey, action } = this.state;
+    const updatedBanks = MacroStackModel.assignGuidedPCStep(banks, bank, selectedKey, action, id, channel, MAX_STEPS);
     const channels = { ...this.state.channels, [id]: channel };
-    this.set({ channels });
-    
-    this.pushLog({
-      text: `sent program change 0 on ch ${channel}`,
-      sub: `guided set completed for ${id}`,
-      tone: 'out'
+
+    this.set({
+      banks: updatedBanks,
+      channels,
     });
+
+    const dev = HardwareRegistry.getDevice(id);
+    this.pushLog({
+      text: `assigned PC 0 on ch ${channel} for ${dev?.name || id}`,
+      sub: `Switch ${selectedKey} (${action}) · controller-mediated learn`,
+      tone: 'ok',
+    });
+  }
+
+  sendDirectPC(channel: number, program: number = 0) {
+    midiService.sendProgramChange(channel, program);
+    this.pushLog({
+      text: `sent direct program change ${program} on ch ${channel}`,
+      sub: `Web MIDI broadcast`,
+      tone: 'out',
+    });
+  }
+
+  sendGuidedPC(id: string, channel: number) {
+    this.assignGuidedPC(id, channel);
+  }
+
+  addPCStep(deviceId: string, program: number, label?: string) {
+    const { banks, bank, selectedKey, action } = this.state;
+    const updatedBanks = MacroStackModel.addOrUpdatePCStep(
+      banks,
+      bank,
+      selectedKey,
+      action,
+      deviceId,
+      program,
+      label,
+      MAX_STEPS,
+    );
+    this.set({ banks: updatedBanks });
+  }
+
+  openPresetPopover(deviceId: string = this.state.browseDevice) {
+    this.set({ browseDevice: deviceId, popoverControlId: 'pc' });
+  }
+
+  selectKey(key: string) {
+    this.selectSwitch(key);
   }
 
   toggleChannelPicker() {

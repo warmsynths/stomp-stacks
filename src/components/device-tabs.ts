@@ -269,16 +269,42 @@ export class DeviceTabs extends LitElement {
         flex: 1;
         padding: 8px 12px;
         border-radius: 12px;
-        background: var(--sky);
+        background: var(--mustard);
         border: 2px solid var(--ink);
         box-shadow: 2px 2px 0 var(--ink);
-        font-size: 12.5px;
+        font-size: 12px;
         font-weight: 600;
+        cursor: pointer;
         transition: transform 100ms, box-shadow 100ms;
       }
       .btn-send:active {
         transform: translate(2px, 2px);
         box-shadow: 0 0 0 var(--ink);
+      }
+      .btn-direct {
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: var(--card);
+        border: 1.5px solid var(--ink);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 120ms;
+      }
+      .btn-direct:hover {
+        background: var(--panel-warm);
+      }
+      .guide-status {
+        margin-top: 10px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: #f7c94833;
+        border: 1.5px solid var(--ink);
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
       .back-btn {
         display: inline-flex;
@@ -432,14 +458,15 @@ export class DeviceTabs extends LitElement {
                   </div>
                 ` : this.helpView === 'guide' ? html`
                   <button class="reset back-btn" @click=${() => (this.helpView = 'menu')}>← back</button>
-                  <div class="pop-title">set a new channel</div>
+                  <div class="pop-title">guided channel learn</div>
+                  <div class="pop-sub" style="margin-bottom:12px">program ${currentDevice?.name || 'this pedal'} via your MIDI controller.</div>
+
                   <ol class="guided-steps">
-                    <li><span class="step-num">1.</span> Unplug power from the pedal.</li>
-                    <li><span class="step-num">2.</span> Hold down both footswitches.</li>
-                    <li><span class="step-num">3.</span> Plug power back in while holding.</li>
-                    <li><span class="step-num">4.</span> Wait for the LEDs to indicate setup mode.</li>
-                    <li><span class="step-num">5.</span> Pick a channel and send a PC message.</li>
+                    <li><span class="step-num">1.</span> Unplug pedal power, hold footswitches, and reconnect power to enter Learn mode.</li>
+                    <li><span class="step-num">2.</span> Assign PC 0 below, then compile/export the rig to your controller.</li>
+                    <li><span class="step-num">3.</span> Tap physical footswitch <strong>[Switch ${st.selectedKey}]</strong> on your board to lock in the channel.</li>
                   </ol>
+
                   <div class="guided-controls">
                     <select class="channel-select" id="guided-channel-select" .value=${currentChannel.toString()}>
                       ${Array.from({ length: 16 }, (_, i) => i + 1).map(ch => html`
@@ -449,12 +476,24 @@ export class DeviceTabs extends LitElement {
                     <button class="btn-send" @click=${() => {
                       const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
                       if (select) {
-                        this.store.sendGuidedPC(active, parseInt(select.value, 10));
+                        const ch = parseInt(select.value, 10);
+                        this.store.assignGuidedPC(active, ch);
                         this.helpView = 'none';
                         this.store.toggleChannelPicker();
                       }
                     }}>
-                      Send PC Message
+                      Assign to Active Switch (${st.selectedKey})
+                    </button>
+                  </div>
+
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px dashed rgba(22,50,61,0.2)">
+                    <span style="font-size:10.5px;opacity:0.65">Direct USB/BLE cable attached?</span>
+                    <button class="btn-direct" @click=${() => {
+                      const select = this.shadowRoot?.querySelector<HTMLSelectElement>('#guided-channel-select');
+                      const ch = select ? parseInt(select.value, 10) : currentChannel;
+                      this.store.sendDirectPC(ch, 0);
+                    }}>
+                      Send via Web MIDI
                     </button>
                   </div>
                 ` : null}

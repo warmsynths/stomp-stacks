@@ -426,6 +426,38 @@ export class MacroPanel extends LitElement {
         font-size: 9px;
         opacity: 0.5;
       }
+      .pc-custom-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .pc-num-input {
+        width: 70px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        border: 2px solid var(--ink);
+        background: var(--card);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 600;
+        outline: none;
+      }
+      .pc-add-btn {
+        padding: 6px 12px;
+        border-radius: 10px;
+        background: var(--mustard);
+        border: 2px solid var(--ink);
+        box-shadow: 2px 2px 0 var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 100ms, box-shadow 100ms;
+      }
+      .pc-add-btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--ink);
+      }
       .list {
         flex: 1;
         min-height: 0;
@@ -780,7 +812,67 @@ export class MacroPanel extends LitElement {
         </div>
       </div>
 
-      ${popControl && popDevice
+      ${st.popoverControlId === 'pc' && popDevice
+        ? html`
+            <div class="popover">
+              <div class="popover-head">
+                <span class="pop-dot" style="background:${popDevice.accent}"></span>
+                <span class="pop-title">${popDevice.name} · Preset Recall (PC)</span>
+                <button class="pop-close" @click=${() => this.store.closePopover()}>×</button>
+              </div>
+
+              <div class="pop-section-title">Quick Presets (0–127)</div>
+              <div class="pop-options" style="margin-bottom:8px">
+                ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 127].map((num) => {
+                  const on = list.some((s) => s.device === st.browseDevice && s.control === 'pc' && s.value === num);
+                  return html`
+                    <button
+                      class="pop-option"
+                      style=${on ? 'background:var(--mustard);font-weight:700;box-shadow:2px 2px 0 var(--ink)' : ''}
+                      @click=${() => this.store.addPCStep(popDevice.id, num)}
+                    >
+                      Preset ${num}
+                    </button>
+                  `;
+                })}
+              </div>
+
+              <div class="pop-section-title">Custom Program #</div>
+              <div class="pc-custom-row">
+                <input
+                  type="number"
+                  min="0"
+                  max="127"
+                  id="custom-pc-input"
+                  class="pc-num-input"
+                  placeholder="0-127"
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value, 10);
+                      if (!isNaN(val) && val >= 0 && val <= 127) {
+                        this.store.addPCStep(popDevice.id, val);
+                      }
+                    }
+                  }}
+                />
+                <button
+                  class="pc-add-btn"
+                  @click=${() => {
+                    const input = this.shadowRoot?.querySelector<HTMLInputElement>('#custom-pc-input');
+                    if (input) {
+                      const val = parseInt(input.value, 10);
+                      if (!isNaN(val) && val >= 0 && val <= 127) {
+                        this.store.addPCStep(popDevice.id, val);
+                      }
+                    }
+                  }}
+                >
+                  Add PC Step
+                </button>
+              </div>
+            </div>
+          `
+        : popControl && popDevice
         ? html`
             <div class="popover">
               <div class="popover-head">
@@ -859,14 +951,15 @@ export class MacroPanel extends LitElement {
                     </div>
                   `
                 : list.map((step, i) => {
-                    const d = describeStep(step);
+                    const d = describeStep(step, st.channels);
+                    const isPc = step.control === 'pc' || step.control === '__pc__';
                     return html`
                       <div class="row">
                         <span class="row-num">${i + 1}</span>
                         <span class="row-dot" style="background:${d.accent}"></span>
                         <span class="row-text">
                           <span class="row-label">${d.label}</span>
-                          <span class="row-meta">${d.deviceName} · cc${d.cc} · ${d.value}</span>
+                          <span class="row-meta">${d.deviceName} · ${isPc ? `PC ${d.value} · ch ${d.channel}` : `cc${d.cc} · ${d.value}`}</span>
                         </span>
                         <span class="row-actions">
                           <button class="nav-btn" ?disabled=${i === 0} @click=${() => this.store.moveStep(i, -1)}>↑</button>

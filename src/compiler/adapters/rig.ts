@@ -62,7 +62,7 @@ export function compileRigJson(state: StompState) {
               return {
                 pedal: s.device,
                 control: s.control,
-                value: s.value === null || s.value === undefined ? MAX_VALUE : s.value,
+                value: s.value === null || s.value === undefined ? (s.control === 'pc' ? 0 : MAX_VALUE) : s.value,
                 label: d.stepLabel || d.label,
               };
             });

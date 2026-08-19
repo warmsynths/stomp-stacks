@@ -304,12 +304,12 @@ export class PirateMidiDeviceApi {
       options.onProgress?.(i + 1, total);
     }
 
-    return { deviceSettings, globalSettings, presetSettings: bankSettings };
+    return { deviceSettings, globalSettings, bankSettings, presetSettings: bankSettings };
   }
 
   /** Pushes a full configuration and, unless told otherwise, commits it. */
   async writeFullConfig(config: ScribbleConfig, options: WriteConfigOptions = {}): Promise<void> {
-    const banks = config.presetSettings ?? [];
+    const banks = config.bankSettings ?? config.presetSettings ?? [];
     const total = Math.min(options.bankCount ?? banks.length, banks.length);
 
     await this.transferGlobalSettings(config.globalSettings);

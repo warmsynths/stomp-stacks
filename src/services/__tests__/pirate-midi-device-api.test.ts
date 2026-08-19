@@ -70,7 +70,8 @@ class FakeScribble implements SerialTransport {
       }
       const match = /^bankSettings,(\d+)$/.exec(packet);
       if (match) {
-        return this.reply(JSON.stringify(this.config.bankSettings[Number(match[1])]));
+        const banks = this.config.bankSettings || this.config.presetSettings;
+        return this.reply(JSON.stringify(banks[Number(match[1])]));
       }
       return this.reply('error');
     }

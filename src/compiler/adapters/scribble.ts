@@ -50,7 +50,7 @@ export function compileScribbleMacroJson(state: StompState) {
       },
       messages: list.map((s) => {
         const d = describeStep(s, state.channels);
-        return [176 + d.channel - 1, d.cc, d.value];
+        return [d.message.statusByte, d.message.dataByte1, d.message.dataByte2];
       }),
     });
   });
@@ -190,10 +190,9 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       midiChannel: 0, // Device API channels are zero-based (0-15)
       globalBpm: 120,
       midiOutPortMode: 'midiOutA',
-      bankPcMidiOutputs: { usbd: 1, ble: 1, midi1: 1 },
+      pcBankOutputs: { usbd: 1, ble: 1, midi1: 1 },
       clockMode: 'external',
       clockDisplayType: 'bpm',
-      tapTempoQuant: 'none',
       usbdThruHandles: { usbd: true, ble: true, midi1: true },
       bleThruHandles: { usbd: false, ble: false, midi1: false },
       midi1ThruHandles: { usbd: true, ble: true, midi1: true },
@@ -213,13 +212,12 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
       wirelessType: 'ble',
       bleMode: 'server',
       mainTextResize: false,
-      zeroIndexBanks: false,
       kemperPlayerMode: false,
       useStaticIp: false,
       staticIp: '0.0.0.0',
       gatewayIp: '0.0.0.0',
     },
-    presetSettings: bankSettings,
+    bankSettings,
   };
 }
 
@@ -333,6 +331,17 @@ export function parseAllScribblePresets(
       const devId = channelToDevice[ch] || fallbackDevId;
       const dev = HardwareRegistry.getDevice(devId);
       if (!dev) return;
+
+      const isPc = statusByte >= 0xc0 && statusByte <= 0xcf;
+      if (isPc) {
+        steps.push({
+          device: devId,
+          control: 'pc',
+          value: cc,
+          label: `PC ${cc}`,
+        });
+        return;
+      }
 
       const control = dev.controls.find((c) => c.cc === cc) || dev.controls[0];
       if (!control) return;
@@ -517,7 +526,7 @@ export class ScribbleTargetAdapter implements TargetAdapter {
   compileExport(state: StompState): TargetExportFile {
     const json = compileHardwareScribbleConfig(state);
     return {
-      filename: 'scribble.customization',
+      filename: 'scribble.json',
       mimeType: 'application/json',
       content: JSON.stringify(json, null, 2),
     };
