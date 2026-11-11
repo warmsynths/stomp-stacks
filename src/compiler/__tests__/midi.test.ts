@@ -17,15 +17,15 @@ import type { StompState } from '../../state/types.js';
 
 describe('MIDI Compiler Logic & Compiler Engine Seam', () => {
   it('correctly calculates MIDI statusByte and CC for steps', () => {
-    // Blooper on channel 3, volume control CC 14
+    // Blooper on channel 1 (default), volume control CC 14
     const desc = describeStep({ device: 'blooper', control: 'volume', value: 64 });
-    expect(desc.channel).toBe(3); // default channel in DEVICES.blooper is 3
+    expect(desc.channel).toBe(1); // default channel in DEVICES.blooper is 1
     expect(desc.cc).toBe(14);
     expect(desc.value).toBe(64);
-    expect(desc.message.statusByte).toBe(0xb0 + (3 - 1)); // 0xB2 = 178
+    expect(desc.message.statusByte).toBe(0xb0 + (1 - 1)); // 0xB0 = 176
     expect(desc.message.dataByte1).toBe(14);
     expect(desc.message.dataByte2).toBe(64);
-    expect(desc.label).toBe('Ramp / Volume · noon');
+    expect(desc.label).toBe('Volume (loop level) · noon');
   });
 
   it('respects custom channel overrides in describeStep', () => {

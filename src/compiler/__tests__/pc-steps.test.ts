@@ -5,12 +5,12 @@ import type { StompState } from '../../state/types.js';
 
 describe('Program Change (PC) Macro Steps & Multi-Target Compiler Support', () => {
   it('correctly calculates MIDI statusByte and program number for PC steps', () => {
-    // Blooper on channel 3 (default), PC 5
+    // Blooper on channel 1 (default), PC 5
     const desc = describeStep({ device: 'blooper', control: 'pc', value: 5 });
-    expect(desc.channel).toBe(3);
-    expect(desc.cc).toBe(0);
+    expect(desc.channel).toBe(1);
+    expect(desc.cc).toBeNull();
     expect(desc.value).toBe(5);
-    expect(desc.message.statusByte).toBe(0xc0 + (3 - 1)); // 0xC2 = 194
+    expect(desc.message.statusByte).toBe(0xc0 + (1 - 1)); // 0xC0 = 192
     expect(desc.message.dataByte1).toBe(5);
     expect(desc.message.dataByte2).toBe(0);
     expect(desc.label).toBe('Preset 5 · PC 5');
@@ -105,11 +105,11 @@ describe('Program Change (PC) Macro Steps & Multi-Target Compiler Support', () =
     const compiled = compileScribbleMacroJson(state);
     const messages = compiled.macros[0].messages;
 
-    // First msg: Blooper (ch 3) PC 0 -> status 194 (0xC2), data1: 0, data2: 0
-    expect(messages[0]).toEqual([194, 0, 0]);
+    // First msg: Blooper (ch 3) PC 0 -> status 194 (0xC2), data1: 0 (2-byte MIDI PC message)
+    expect(messages[0]).toEqual([194, 0]);
 
-    // Second msg: Mood (ch 2) PC 15 -> status 193 (0xC1), data1: 15, data2: 0
-    expect(messages[1]).toEqual([193, 15, 0]);
+    // Second msg: Mood (ch 2) PC 15 -> status 193 (0xC1), data1: 15 (2-byte MIDI PC message)
+    expect(messages[1]).toEqual([193, 15]);
 
     // Third msg: Blooper CC 14 val 64 -> status 178 (0xB2), data1: 14, data2: 64
     expect(messages[2]).toEqual([178, 14, 64]);
@@ -184,7 +184,7 @@ describe('Program Change (PC) Macro Steps & Multi-Target Compiler Support', () =
     const result = CompilerEngine.compile(state, 'trace');
     expect(result.targetId).toBe('trace');
     const content = result.exportFile.content;
-    expect(content).toContain('C2 00 00');
+    expect(content).toContain('C2 00');
     expect(content.toLowerCase()).toContain('blooper');
   });
 });

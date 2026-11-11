@@ -27,8 +27,8 @@ export class TraceTargetAdapter implements TargetAdapter {
     eachStack(state, (bi, k, _ki, a, l) => {
       push(`▸ bank ${bi + 1} · ${k} ${a.label}`, { bold: true });
       l.forEach((s) => {
-        const d = describeStep(s, state.channels);
-        push(`    ${hex(d.message.statusByte)} ${hex(d.message.dataByte1)} ${hex(d.message.dataByte2)}    ${d.deviceName} ${d.label}`, { muted: true });
+        const d = describeStep(s, state.channels, state.pedalSets, state.offsets);
+        push(`    ${d.bytes.map(hex).join(' ').padEnd(8, ' ')}    ${d.deviceName} ${d.label}`, { muted: true });
       });
       push('');
     });

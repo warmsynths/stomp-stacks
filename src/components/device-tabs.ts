@@ -57,12 +57,6 @@ export class DeviceTabs extends LitElement {
       .chip-btn:active {
         transform: scale(0.97);
       }
-      .chip-wrap[active] .chip-btn {
-        padding-right: 6px;
-      }
-      .chip-wrap[active][single] .chip-btn {
-        padding-right: 14px;
-      }
       .dot {
         width: 13px;
         height: 13px;
@@ -70,25 +64,24 @@ export class DeviceTabs extends LitElement {
         flex: none;
         border: 2px solid var(--ink);
       }
-      .remove-btn {
-        width: 22px;
-        height: 22px;
-        flex: none;
-        margin-right: 5px;
-        border-radius: 50%;
+      .drop-pedal-btn {
+        width: 100%;
+        margin-top: 12px;
+        padding: 8px 0;
+        border-radius: 12px;
         border: 2px solid var(--ink);
-        font-size: 12px;
-        line-height: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 12.5px;
+        font-weight: 600;
+        opacity: 0.7;
         transition:
           background 150ms ease,
-          color 150ms ease;
+          color 150ms ease,
+          opacity 150ms ease;
       }
-      .remove-btn:hover {
+      .drop-pedal-btn:hover {
         background: var(--coral);
-        color: var(--paper);
+        color: var(--card);
+        opacity: 1;
       }
       .add-chip {
         display: flex;
@@ -513,28 +506,25 @@ export class DeviceTabs extends LitElement {
             const d = HardwareRegistry.getDevice(id);
             if (!d) return null;
             const on = active === id;
+            const peekOnThis = !on && st.peek?.device === id;
             return html`
               <span
                 class="chip-wrap"
                 ?active=${on}
-                ?single=${st.rig.length <= 1}
-                style=${on ? `background:${d.accent};box-shadow:2px 2px 0 var(--ink)` : 'background:transparent;opacity:.6'}
+                style=${on
+                  ? `background:${d.accent};box-shadow:2px 2px 0 var(--ink)`
+                  : 'background:transparent;opacity:.6'}
               >
-                <button class="chip-btn" @click=${() => this.store.setBrowseDevice(id)}>
+                <button
+                  class="chip-btn"
+                  style=${peekOnThis
+                    ? 'border-radius:18px;background:#f7c948;animation:ring 1s cubic-bezier(.23,1,.32,1) infinite'
+                    : ''}
+                  @click=${() => this.store.setBrowseDevice(id)}
+                >
                   <span class="dot" style="background:${d.accent}"></span>
                   <span>${d.name}</span>
                 </button>
-                ${on && st.rig.length > 1
-                  ? html`
-                      <button
-                        class="remove-btn"
-                        title="take ${d.name} out of the rig"
-                        @click=${() => this.store.setConfirmRemove(id)}
-                      >
-                        ×
-                      </button>
-                    `
-                  : null}
               </span>
             `;
           })}
@@ -581,6 +571,19 @@ export class DeviceTabs extends LitElement {
                   <button class="help-btn" @click=${() => (this.helpView = 'menu')}>
                     Need help finding or setting your channel?
                   </button>
+                  ${st.rig.length > 1
+                    ? html`
+                        <button
+                          class="drop-pedal-btn"
+                          @click=${() => {
+                            this.store.closeChannelPicker();
+                            this.store.setConfirmRemove(active);
+                          }}
+                        >
+                          take ${currentDevice?.name} out of the rig
+                        </button>
+                      `
+                    : null}
                 ` : this.helpView === 'menu' ? html`
                   <button class="reset back-btn" @click=${() => (this.helpView = 'none')}>← back to channels</button>
                   <div class="pop-title">channel tools</div>

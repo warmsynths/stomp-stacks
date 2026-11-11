@@ -1,24 +1,51 @@
 import { ACTIONS, type ActionId, CONTROLLERS } from '../data/controllers.js';
+import { BRAINS } from '../data/brains.js';
 import type { DeviceControl } from '../data/devices.js';
 import { DEVICES } from '../data/devices.js';
 import { NAMING, PALETTE, HEX, FALLBACK, isDark, type ColorName, type NamingTargetDef } from '../data/naming.js';
 import { HardwareRegistry, DEVICE_ORDER } from '../data/registry.js';
-import { MacroStackModel, DEFAULT_MAX_STEPS } from './macro-stack-model.js';
-import type { FaceMode, MacroStep, StompState, PresetNaming, IdentResult, WireLogEntry, ParsedPresetItem, Bank, ReadPresetSlot } from './types.js';
+import { CAPS, capOf, type CapabilityDef, type CapabilityId } from '../data/capabilities.js';
+import { SEED_SETS, type PedalSetup, type SetupDeviceId } from '../data/setups.js';
+import { SEED_ACTIONS, type ActionDef } from '../data/actions.js';
+import { MacroStackModel, DEFAULT_MAX_STEPS, knobWord, wiggleInfo, stepRole, clash } from './macro-stack-model.js';
+import type {
+  ActionBucket,
+  Bank,
+  ClashResult,
+  DragState,
+  FaceMode,
+  IdentResult,
+  MacroStep,
+  Message,
+  ParsedPresetItem,
+  PeekState,
+  PresetNaming,
+  ReadPresetSlot,
+  StompState,
+  WiggleInfo,
+  WireLogEntry,
+} from './types.js';
 import { midiService, hex } from '../services/midi-service.js';
 import { parseAllScribblePresets } from '../compiler/adapters/scribble.js';
+import { describeStep } from '../compiler/adapters/mc3.js';
 import type { ScribbleConfig } from '../types/scribble.js';
 
-
-
-
-
 export const MAX_STEPS = DEFAULT_MAX_STEPS;
-
 
 function trunc(s: string, n: number): string {
   if (!s) return '';
   return s.length <= n ? s : s.slice(0, n);
+}
+
+function getInitialSetupStep(): 1 | null {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('stomp-stacks:setup-done')) {
+      return null;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return 1;
 }
 
 function initialState(controllerId: string): StompState {
@@ -56,9 +83,38 @@ function initialState(controllerId: string): StompState {
     monitorOn: false,
     log: [],
     seq: 0,
+    // v3 fields
+    ctrlMin: false,
+    drag: null,
+    conflict: null,
+    peek: null,
+    mode: 'assign',
+    actEdit: null,
+    edPick: null,
+    focus: null,
+    libOpen: typeof window !== 'undefined' ? window.innerWidth >= 1100 : true,
+    capOpen: {},
+    lens: null,
+    actions: SEED_ACTIONS.map((a) => ({ ...a, caps: [...a.caps], steps: a.steps.map((s) => ({ ...s })) })),
+    pedalSets: SEED_SETS.map((s) => ({
+      ...s,
+      move: { ...s.move },
+      fall: { ...s.fall },
+      ...(s.extras ? { extras: { ...s.extras } } : {}),
+    })),
+    setsOpen: null,
+    setsDevice: 'mood',
+    walkIndex: null,
+    instSeq: 1,
+    setupStep: getInitialSetupStep(),
+    hintOpen: null,
+    hintAll: false,
+    notice: null,
+    firing: null,
+    lit: null,
+    jumpOpen: false,
   };
 }
-
 
 /**
  * Central reactive UI store for the app.
@@ -79,6 +135,103 @@ export class StompStore extends EventTarget {
 
   get totalAssigned(): number {
     return MacroStackModel.countTotalAssignedSteps(this.state.banks);
+  }
+
+  limit(): number {
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    if (ctrl.isBrain) return BRAINS.scribble.maxSteps;
+    if (st.brainId === 'onboard' && !ctrl.onboard) return 1;
+    return BRAINS[st.brainId]?.maxSteps || DEFAULT_MAX_STEPS;
+  }
+
+  limitWho(): string {
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    if (ctrl.isBrain || st.brainId === 'scribble') return 'scribble';
+    if (st.brainId === 'onboard' && ctrl.onboard) return ctrl.short;
+    return `${ctrl.short} on its own`;
+  }
+
+  slotName(): string {
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    const act = ACTIONS.find((x) => x.id === st.action)?.label || st.action;
+    const keyLabel = ctrl.nav
+      ? `p${String(st.bank + 1).padStart(3, '0')} ${({ L: 'left', R: 'right' } as Record<string, string>)[st.selectedKey] || st.selectedKey}`
+      : `switch ${st.selectedKey}`;
+    return `${keyLabel} ${act}`;
+  }
+
+  availableActions(): Array<{ id: ActionId; label: string }> {
+    const ctrl = CONTROLLERS[this.state.controllerId] || CONTROLLERS.chocolate;
+    return ACTIONS.filter((a) => !ctrl.actions || ctrl.actions.includes(a.id));
+  }
+
+  setsForDevice(deviceId: string): PedalSetup[] {
+    return this.state.pedalSets.filter((s) => s.device === deviceId);
+  }
+
+  setPedalSetupStep(setId: string, deviceId: string = this.state.browseDevice) {
+    const { banks, bank, selectedKey, action, mode, actEdit, actions } = this.state;
+    if (mode === 'build' && actEdit) {
+      this.updateAction(actEdit, (a) => {
+        const at = a.steps.findIndex((x) => x.device === deviceId && x.control === 'pc');
+        if (at >= 0) {
+          a.steps[at] = { ...a.steps[at], set: setId, value: null };
+        } else if (a.steps.length < this.limit()) {
+          a.steps.unshift({ device: deviceId, control: 'pc', set: setId, value: null });
+        }
+        return a;
+      });
+      this.set({ popoverControlId: null });
+      return;
+    }
+
+    const next = MacroStackModel.cloneBanks(banks);
+    const list = next[bank]?.[selectedKey]?.[action];
+    if (!list) return;
+    const at = list.findIndex((x) => x.device === deviceId && x.control === 'pc');
+    if (at >= 0) {
+      if (list[at].inst !== undefined) {
+        MacroStackModel.detachIn(list, list[at].inst!, actions);
+      }
+      if (list[at].set === setId) {
+        list.splice(at, 1);
+      } else {
+        list[at] = { ...list[at], set: setId, value: null };
+      }
+    } else if (list.length < this.limit()) {
+      list.unshift({ device: deviceId, control: 'pc', set: setId, value: null });
+    }
+    this.set({ banks: next, popoverControlId: null });
+  }
+
+  setPedalSetupAt(stepIndex: number, setId: string) {
+    const next = MacroStackModel.cloneBanks(this.state.banks);
+    const list = next[this.state.bank]?.[this.state.selectedKey]?.[this.state.action];
+    if (!list || !list[stepIndex]) return;
+    if (list[stepIndex].inst !== undefined) {
+      MacroStackModel.detachIn(list, list[stepIndex].inst!, this.state.actions);
+    }
+    list[stepIndex] = { ...list[stepIndex], set: setId, value: null };
+    this.set({ banks: next });
+  }
+
+  setKnobValue(controlId: string, v: number) {
+    this.setKnob(controlId, v);
+  }
+
+  setKnobNumericValue(controlId: string, v: number) {
+    this.setKnob(controlId, v);
+  }
+
+  clearNotice() {
+    this.setNotice(null);
+  }
+
+  setBank(i: number) {
+    this.selectBank(i);
   }
 
   nextFreeChannel(rig: string[] = this.state.rig, channels: Record<string, number> = this.state.channels): number {
@@ -105,25 +258,32 @@ export class StompStore extends EventTarget {
     this.set({ rig, browseDevice, channelPickerOpen: false, popoverControlId: null, confirmRemovePedal: null });
   }
 
+  toggleRigPedal(id: string) {
+    if (this.state.rig.includes(id)) {
+      if (this.state.rig.length > 1) this.dropPedal(id);
+    } else {
+      this.addPedal(id);
+    }
+  }
+
   setPedalChannel(id: string, channel: number) {
     const channels = { ...this.state.channels, [id]: channel };
     this.set({ channels, channelPickerOpen: false });
   }
 
   sendTestCC(channel: number) {
-    // Send CC 93 (Tap Tempo / harmless on Chase Bliss) with value 127
     midiService.sendControlChange(channel, 93, 127);
     this.pushLog({
       text: `sent test cc 93 on ch ${channel}`,
       sub: `sweeper diagnostic`,
-      tone: 'out'
+      tone: 'out',
     });
   }
 
   assignGuidedPC(id: string, channel: number, targetKey?: string) {
     const { banks, bank, action } = this.state;
     const switchKey = targetKey || this.state.selectedKey;
-    const updatedBanks = MacroStackModel.assignGuidedPCStep(banks, bank, switchKey, action, id, channel, MAX_STEPS);
+    const updatedBanks = MacroStackModel.assignGuidedPCStep(banks, bank, switchKey, action, id, channel, this.limit());
     const channels = { ...this.state.channels, [id]: channel };
 
     this.set({
@@ -163,7 +323,7 @@ export class StompStore extends EventTarget {
       deviceId,
       program,
       label,
-      MAX_STEPS,
+      this.limit(),
     );
     this.set({ banks: updatedBanks });
   }
@@ -216,8 +376,15 @@ export class StompStore extends EventTarget {
     this.set({ targetId: id });
   }
 
-  /** A control opens its popover if it has value options, macro templates, or is multi-state; otherwise assigns immediately. */
+  /** A control opens its popover if it has value options or is a knob/toggle; in build mode it appends/focuses immediately. */
   clickControl(control: DeviceControl) {
+    if (this.state.mode === 'build' && this.state.actEdit) {
+      const defaultVal =
+        control.values && control.values.length > 0 ? control.values[0].value : control.type === 'knob' ? 64 : null;
+      this.addStep(control.id, defaultVal);
+      return;
+    }
+
     const device = HardwareRegistry.getDevice(this.state.browseDevice);
     const hasTemplates = device?.macroTemplates?.some((t) => t.controlId === control.id);
     const hasValues = (control.values && control.values.length > 0) || control.type === 'knob' || control.type === 'toggle';
@@ -232,9 +399,31 @@ export class StompStore extends EventTarget {
     this.addStep(control.id, null);
   }
 
-  /** Toggles the step off if it's already assigned; otherwise appends (capped at MAX_STEPS). */
+  /** Toggles the step off if it's already assigned; otherwise appends (capped at limit()). Supports build mode for Actions. */
   addStep(controlId: string, value: number | null, label?: string) {
-    const { banks, bank, selectedKey, action, browseDevice } = this.state;
+    const { banks, bank, selectedKey, action, browseDevice, mode, actEdit, actions } = this.state;
+
+    if (mode === 'build') {
+      if (!actEdit) {
+        this.set({
+          notice: 'pick an action on the left first — or start a new one.',
+          popoverControlId: null,
+        });
+        return;
+      }
+      this.updateAction(actEdit, (a) => {
+        const at = a.steps.findIndex((x) => x.device === browseDevice && x.control === controlId);
+        if (at < 0 && a.steps.length < this.limit()) {
+          a.steps.push({ device: browseDevice, control: controlId, value, ...(label ? { label } : {}) });
+        } else if (at >= 0) {
+          a.steps[at] = { ...a.steps[at], value, ...(label ? { label } : {}) };
+        }
+        return a;
+      });
+      this.set({ popoverControlId: null, notice: null, focus: `${browseDevice}:${controlId}` });
+      return;
+    }
+
     const updatedBanks = MacroStackModel.addOrToggleStep(
       banks,
       bank,
@@ -243,10 +432,58 @@ export class StompStore extends EventTarget {
       browseDevice,
       controlId,
       value,
-      MAX_STEPS,
+      this.limit(),
       label,
+      actions,
     );
     this.set({ banks: updatedBanks, popoverControlId: null, sheetOpen: true });
+  }
+
+  setKnob(controlId: string, v: number | string) {
+    const numVal = Number(v);
+    const dev = this.state.browseDevice;
+    if (this.state.mode === 'build' && this.state.actEdit) {
+      const ea = this.actionById(this.state.actEdit);
+      if (!ea || !ea.steps.some((x) => x.device === dev && x.control === controlId)) {
+        this.addStep(controlId, numVal);
+        return;
+      }
+      this.updateAction(ea.id, (a) => {
+        const at = a.steps.findIndex((x) => x.device === dev && x.control === controlId);
+        if (at >= 0) a.steps[at] = { ...a.steps[at], value: numVal };
+        return a;
+      });
+      return;
+    }
+
+    const updatedBanks = MacroStackModel.setKnobInBanks(
+      this.state.banks,
+      this.state.bank,
+      this.state.selectedKey,
+      this.state.action,
+      dev,
+      controlId,
+      numVal,
+      this.limit(),
+      this.state.actions,
+    );
+    this.set({ banks: updatedBanks, sheetOpen: true });
+  }
+
+  setValueAt(stepIndex: number, v: number | string | null, label?: string) {
+    const numVal = v === null ? null : Number(v);
+    const next = MacroStackModel.cloneBanks(this.state.banks);
+    const list = next[this.state.bank]?.[this.state.selectedKey]?.[this.state.action];
+    if (!list || !list[stepIndex]) return;
+    if (list[stepIndex].inst !== undefined) {
+      MacroStackModel.detachIn(list, list[stepIndex].inst!, this.state.actions);
+    }
+    list[stepIndex] = {
+      ...list[stepIndex],
+      value: numVal,
+      ...(label !== undefined ? { label } : {}),
+    };
+    this.set({ banks: next });
   }
 
   /** Inserts all steps from an onboard switch lifecycle macro template into the active action bucket. */
@@ -262,15 +499,15 @@ export class StompStore extends EventTarget {
       action,
       browseDevice,
       tmpl.steps,
-      MAX_STEPS,
+      this.limit(),
     );
     this.set({ banks: updatedBanks, popoverControlId: null, sheetOpen: true });
   }
 
   removeStep(index: number) {
-    const { banks, bank, selectedKey, action } = this.state;
-    const updatedBanks = MacroStackModel.removeStep(banks, bank, selectedKey, action, index);
-    this.set({ banks: updatedBanks });
+    const { banks, bank, selectedKey, action, actions } = this.state;
+    const updatedBanks = MacroStackModel.removeStep(banks, bank, selectedKey, action, index, actions);
+    this.set({ banks: updatedBanks, edPick: null });
   }
 
   moveStep(index: number, dir: -1 | 1) {
@@ -279,16 +516,605 @@ export class StompStore extends EventTarget {
     this.set({ banks: updatedBanks });
   }
 
+  moveTo(fromIndex: number, toIndex: number) {
+    const { banks, bank, selectedKey, action } = this.state;
+    const updatedBanks = MacroStackModel.moveTo(banks, bank, selectedKey, action, fromIndex, toIndex);
+    this.set({ banks: updatedBanks });
+  }
+
+  // --- Linked Actions & Capabilities Methods ---
+
+  findSet(id?: string | null): PedalSetup | undefined {
+    if (!id) return undefined;
+    return this.state.pedalSets.find((x) => x.id === id);
+  }
+
+  actionById(id?: string | null): ActionDef | undefined {
+    if (!id) return undefined;
+    return this.state.actions.find((a) => a.id === id);
+  }
+
+  capOf(id: string): CapabilityDef {
+    return capOf(id);
+  }
+
+  listCaps(list: Message[]): CapabilityId[] {
+    const m: Record<string, boolean> = {};
+    list.forEach((x) => {
+      if (!x.act) return;
+      const a = this.actionById(x.act);
+      if (a) a.caps.forEach((c) => (m[c] = true));
+    });
+    return Object.keys(m) as CapabilityId[];
+  }
+
+  slotCaps(slot?: ActionBucket): CapabilityId[] {
+    if (!slot) return [];
+    return this.listCaps([...slot.press, ...slot.hold, ...slot.double]);
+  }
+
+  actionUsage(): Record<string, number> {
+    const m: Record<string, number> = {};
+    this.state.banks.forEach((b) =>
+      Object.keys(b).forEach((k) =>
+        ACTIONS.forEach((a) => {
+          const seen: Record<number, boolean> = {};
+          b[k][a.id].forEach((x) => {
+            if (x.act && x.inst !== undefined && !seen[x.inst]) {
+              seen[x.inst] = true;
+              m[x.act] = (m[x.act] || 0) + 1;
+            }
+          });
+        }),
+      ),
+    );
+    return m;
+  }
+
+  missingFor(a: ActionDef): string[] {
+    const m: Record<string, boolean> = {};
+    a.steps.forEach((x) => {
+      if (!this.state.rig.includes(x.device)) {
+        m[DEVICES[x.device]?.name || x.device] = true;
+      }
+    });
+    return Object.keys(m);
+  }
+
+  updateAction(id: string, fn: (a: ActionDef) => ActionDef) {
+    const actions = this.state.actions.map((a) =>
+      a.id === id
+        ? fn({
+            ...a,
+            steps: a.steps.map((x) => ({ ...x })),
+            caps: [...a.caps],
+          })
+        : a,
+    );
+    const act = actions.find((a) => a.id === id);
+    const banks = act
+      ? MacroStackModel.syncBanks(
+          this.state.banks,
+          id,
+          act.steps.filter((x) => this.state.rig.includes(x.device)),
+        )
+      : this.state.banks;
+    this.set({ actions, banks });
+  }
+
+  insertAction(id: string, how?: 'merge' | 'useNew' | 'keepOld') {
+    const st = this.state;
+    const a = this.actionById(id);
+    if (!a) return;
+
+    if (!how) {
+      const cur = st.banks[st.bank]?.[st.selectedKey]?.[st.action] || [];
+      const np = a.steps.find(
+        (x) =>
+          x.control === 'pc' &&
+          x.set &&
+          st.rig.includes(x.device) &&
+          cur.some((y) => y.device === x.device && y.control === 'pc' && y.set && y.set !== x.set),
+      );
+      if (np && np.set) {
+        const oi = cur.findIndex((y) => y.device === np.device && y.control === 'pc' && y.set && y.set !== np.set);
+        if (oi >= 0) {
+          const oldStep = cur[oi];
+          const oldName = oldStep.act
+            ? this.actionById(oldStep.act)?.name || 'this press'
+            : oldStep.from || 'this press';
+          this.set({
+            conflict: {
+              act: id,
+              device: np.device,
+              oldSet: oldStep.set!,
+              newSet: np.set,
+              oldName,
+            },
+            popoverControlId: null,
+          });
+          return;
+        }
+      }
+    }
+
+    const list = st.banks[st.bank]?.[st.selectedKey]?.[st.action] || [];
+    const where = this.slotName();
+    const miss = this.missingFor(a);
+    let send = a.steps.filter((x) => st.rig.includes(x.device));
+    const cf = st.conflict;
+
+    if (how === 'keepOld' && cf) {
+      send = send.filter((x) => !(x.device === cf.device && x.control === 'pc'));
+    }
+    if (how === 'useNew' && cf) {
+      const extra = list.filter((y) => y.device === cf.device && y.control === 'pc').length;
+      if (list.length - extra + send.length > this.limit()) {
+        this.set({
+          notice: `“${a.name}” doesn't fit, even after dropping the other preset load.`,
+          conflict: null,
+        });
+        return;
+      }
+    }
+    if (how === 'merge' && cf) {
+      send = send.filter((x) => !(x.device === cf.device && x.control === 'pc'));
+    }
+
+    if (!a.steps.length) {
+      this.set({ notice: `“${a.name}” has no messages yet — open it and add some.` });
+      return;
+    }
+    if (!send.length) {
+      this.set({
+        notice: `none of “${a.name}”'s pedals are in the rig (${miss.join(' + ')}). edit it to point at yours.`,
+      });
+      return;
+    }
+    if (how !== 'useNew' && list.length + send.length > this.limit()) {
+      this.set({
+        notice: `“${a.name}” needs ${send.length} messages; ${where} only has room for ${this.limit() - list.length} more.`,
+      });
+      return;
+    }
+
+    const inst = st.instSeq;
+    let mergedId: string | null = null;
+    let nextSets = st.pedalSets;
+
+    if (how === 'merge' && cf) {
+      const A = this.findSet(cf.oldSet);
+      const B = this.findSet(cf.newSet);
+      if (A && B) {
+        const dev = A.device || (cf.device as SetupDeviceId) || 'mood';
+        const used: Record<number, boolean> = {};
+        st.pedalSets.filter((s) => s.device === dev).forEach((x) => (used[x.slot] = true));
+        let slot = 1;
+        while (used[slot] && slot < 122) slot++;
+        mergedId = 's' + Date.now();
+        const m: PedalSetup = {
+          id: mergedId,
+          device: dev,
+          name: `${A.name} + ${B.name}`,
+          slot,
+          saved: false,
+          move: { ...A.move, ...B.move },
+          fall: { ...A.fall, ...B.fall },
+          bounce: A.bounce,
+          sweep: A.sweep,
+          shape: A.shape,
+          extras: { ...(A.extras || {}), ...(B.extras || {}) },
+        };
+        nextSets = [...st.pedalSets, m];
+      }
+    }
+
+    const nextBanks = MacroStackModel.cloneBanks(st.banks);
+    const l = nextBanks[st.bank][st.selectedKey][st.action];
+
+    if (how === 'useNew' && cf) {
+      for (let k = l.length - 1; k >= 0; k--) {
+        if (l[k].device === cf.device && l[k].control === 'pc') {
+          if (l[k].inst !== undefined) MacroStackModel.detachIn(l, l[k].inst!, st.actions);
+          l.splice(k, 1);
+        }
+      }
+    }
+    if (how === 'merge' && cf && mergedId) {
+      l.forEach((y, k) => {
+        if (y.device === cf.device && y.control === 'pc') {
+          if (y.inst !== undefined) MacroStackModel.detachIn(l, y.inst!, st.actions);
+          l[k] = { ...l[k], set: mergedId! };
+        }
+      });
+    }
+
+    const detached = how === 'keepOld' || how === 'merge';
+    send.forEach((x) => {
+      l.push(detached ? { ...x, from: a.name } : { ...x, act: id, inst });
+    });
+
+    const devName = cf ? DEVICES[cf.device]?.faceName || DEVICES[cf.device]?.name || cf.device.toUpperCase() : 'MOOD';
+    const mergeNotice =
+      how === 'merge'
+        ? `merged into a new set-up — save it to ${devName} once (walkthrough in set-ups) before it'll move anything.`
+        : miss.length
+          ? `added “${a.name}” without its ${miss.join(' + ')} messages — not in the rig.`
+          : null;
+
+    this.set({
+      banks: nextBanks,
+      pedalSets: nextSets,
+      conflict: how ? null : st.conflict,
+      instSeq: inst + 1,
+      notice: mergeNotice,
+      sheetOpen: true,
+      popoverControlId: null,
+    });
+
+    this.pushLog({
+      text: `+ ${a.name}`,
+      sub: `${where} · ${send.length} ${send.length === 1 ? 'message' : 'messages'}, ${detached ? 'unlinked' : 'linked'}`,
+      tone: 'ok',
+    });
+  }
+
+  removeGroup(inst: number) {
+    const next = MacroStackModel.cloneBanks(this.state.banks);
+    const l = next[this.state.bank]?.[this.state.selectedKey]?.[this.state.action];
+    if (!l) return;
+    for (let i = l.length - 1; i >= 0; i--) {
+      if (l[i].inst === inst) l.splice(i, 1);
+    }
+    this.set({ banks: next, edPick: null });
+  }
+
+  detachGroup(inst: number) {
+    const next = MacroStackModel.cloneBanks(this.state.banks);
+    const l = next[this.state.bank]?.[this.state.selectedKey]?.[this.state.action];
+    if (!l) return;
+    MacroStackModel.detachIn(l, inst, this.state.actions);
+    this.set({ banks: next });
+  }
+
+  newAction(cap: CapabilityId) {
+    const id = 'u' + Date.now();
+    const nextAct: ActionDef = { id, name: 'new action', caps: [cap], what: '', steps: [] };
+    this.set({
+      actions: [...this.state.actions, nextAct],
+      actEdit: id,
+      mode: 'build',
+      capOpen: { ...this.state.capOpen, [cap]: true },
+    });
+  }
+
+  saveStackAsAction(cap: CapabilityId) {
+    const st = this.state;
+    const list = st.banks[st.bank]?.[st.selectedKey]?.[st.action] || [];
+    const plain = list.filter((x) => !x.act);
+    if (!plain.length) return;
+    const steps: Message[] = plain.map((x) => {
+      const n = { ...x };
+      delete n.from;
+      return n;
+    });
+    const id = 'u' + Date.now();
+    const inst = st.instSeq;
+    const nm = this.ident(st.bank, st.selectedKey).name || 'new action';
+    const nextBanks = MacroStackModel.cloneBanks(st.banks);
+    const l = nextBanks[st.bank][st.selectedKey][st.action];
+    l.forEach((x, i) => {
+      if (!x.act) {
+        const n: Message = { ...x, act: id, inst };
+        delete n.from;
+        l[i] = n;
+      }
+    });
+    this.set({
+      actions: [...st.actions, { id, name: nm, caps: [cap], what: '', steps }],
+      banks: nextBanks,
+      actEdit: id,
+      mode: 'build',
+      instSeq: inst + 1,
+    });
+  }
+
+  deleteAction(id: string) {
+    const st = this.state;
+    const a = st.actions.find((x) => x.id === id);
+    const fix = (l: Message[]): Message[] =>
+      l.map((x) => {
+        if (x.act !== id) return x;
+        const n: Message = { ...x, from: a ? a.name : 'an action' };
+        delete n.act;
+        delete n.inst;
+        return n;
+      });
+    const banks = st.banks.map((b) => {
+      const nb: Bank = {};
+      Object.keys(b).forEach((k) => {
+        nb[k] = {
+          press: fix(b[k].press),
+          hold: fix(b[k].hold),
+          double: fix(b[k].double),
+        };
+      });
+      return nb;
+    });
+    this.set({
+      actions: st.actions.filter((x) => x.id !== id),
+      banks,
+      actEdit: null,
+      mode: 'assign',
+    });
+  }
+
+  // --- Pedal Set-ups Methods ---
+
+  updateSet(id: string, fn: (s: PedalSetup) => PedalSetup) {
+    const pedalSets = this.state.pedalSets.map((x) =>
+      x.id === id
+        ? fn({
+            ...x,
+            move: { ...x.move },
+            fall: { ...x.fall },
+            ...(x.extras ? { extras: { ...x.extras } } : {}),
+          })
+        : x,
+    );
+    this.set({ pedalSets });
+  }
+
+  newSet(device: SetupDeviceId = this.state.setsDevice) {
+    const used: Record<number, boolean> = {};
+    this.state.pedalSets.filter((x) => x.device === device).forEach((x) => (used[x.slot] = true));
+    let slot = 1;
+    while (used[slot] && slot < 122) slot++;
+    const id = 's' + Date.now();
+    const newSetup: PedalSetup = {
+      id,
+      device,
+      name: 'new set-up',
+      slot,
+      saved: false,
+      move: {},
+      fall: {},
+      bounce: true,
+      sweep: 'top',
+      shape: 'tri',
+      extras: {},
+    };
+    this.set({
+      pedalSets: [...this.state.pedalSets, newSetup],
+      setsOpen: id,
+      setsDevice: device,
+      walkIndex: null,
+    });
+  }
+
+  saveSetToPedal(id: string) {
+    const set = this.findSet(id);
+    if (!set) return;
+    const dev = set.device || 'mood';
+    const devName = DEVICES[dev]?.faceName || DEVICES[dev]?.name || dev.toUpperCase();
+    const ch = this.state.channels[dev] || 2;
+    if (this.state.conn[dev]) {
+      midiService.sendProgramChange(ch, set.slot);
+    }
+    this.pushLog({
+      text: `${hex(192 + ch - 1)} ${hex(set.slot)}`,
+      sub: `${devName} stores its switches and knobs in slot ${set.slot} — keep both footswitches held`,
+      tone: this.state.conn[dev] ? 'out' : 'warn',
+    });
+    this.updateSet(id, (x) => ({ ...x, saved: true }));
+  }
+
+  mergeSetups(i: number, j: number) {
+    const st = this.state;
+    const nextBanks = MacroStackModel.cloneBanks(st.banks);
+    const list = nextBanks[st.bank]?.[st.selectedKey]?.[st.action];
+    if (!list) return;
+    const a = list[i];
+    const b = list[j];
+    if (!a || !b || !a.set || !b.set) return;
+    const A = this.findSet(a.set);
+    const B = this.findSet(b.set);
+    if (!A || !B) return;
+
+    const dev = A.device || (a.device as SetupDeviceId) || 'mood';
+    const used: Record<number, boolean> = {};
+    st.pedalSets.filter((x) => x.device === dev).forEach((x) => (used[x.slot] = true));
+    let slot = 1;
+    while (used[slot] && slot < 122) slot++;
+    const id = 's' + Date.now();
+    const m: PedalSetup = {
+      id,
+      device: dev,
+      name: `${A.name} + ${B.name}`,
+      slot,
+      saved: false,
+      move: { ...A.move, ...B.move },
+      fall: { ...A.fall, ...B.fall },
+      bounce: A.bounce,
+      sweep: A.sweep,
+      shape: A.shape,
+      extras: { ...(A.extras || {}), ...(B.extras || {}) },
+    };
+
+    if (a.inst !== undefined) MacroStackModel.detachIn(list, a.inst, st.actions);
+    if (b.inst !== undefined) MacroStackModel.detachIn(list, b.inst, st.actions);
+    list[i] = { ...list[i], set: id };
+    list.splice(j, 1);
+
+    this.set({
+      banks: nextBanks,
+      pedalSets: [...st.pedalSets, m],
+    });
+  }
+
+  openSetups(setId?: string | null, device?: SetupDeviceId) {
+    const set = setId ? this.findSet(setId) : undefined;
+    const targetDev = set?.device || device || this.state.setsDevice || 'mood';
+    const firstForDev = this.state.pedalSets.find((s) => s.device === targetDev);
+    this.set({
+      setsDevice: targetDev,
+      setsOpen: set ? set.id : firstForDev ? firstForDev.id : '__empty__',
+      walkIndex: null,
+    });
+  }
+
+  closeSetups() {
+    this.set({ setsOpen: null, walkIndex: null });
+  }
+
+  setWalkIndex(walkIndex: number | null) {
+    this.set({ walkIndex });
+  }
+
+  createSaveButtonOnP128(so: PedalSetup) {
+    const st = this.state;
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    const nextBanks = MacroStackModel.cloneBanks(st.banks);
+    const last = nextBanks.length - 1;
+    const key = ctrl.keys[0];
+    nextBanks[last][key].press = [{ device: so.device, control: 'pc', set: so.id, value: null }];
+    const naming = {
+      ...st.naming,
+      [`${last}:${key}`]: {
+        name: `SAVE ${so.device.toUpperCase().slice(0, 6)}`,
+        secondary: `slot ${so.slot}`,
+        color: 'orange' as ColorName,
+      },
+    };
+    this.set({ banks: nextBanks, naming });
+    this.pushLog({
+      text: `p128 → save ${so.device.toUpperCase()} slot ${so.slot}`,
+      sub: 'in your next scribble export',
+      tone: 'ok',
+    });
+  }
+
+  // --- Wiggle, Clash & UI State Helpers ---
+
+  knobWord(v: number | string | null | undefined): string {
+    return knobWord(v);
+  }
+
+  wiggleInfo(steps: Message[]): WiggleInfo | null {
+    return wiggleInfo(steps, this.state.pedalSets);
+  }
+
+  stepRole(steps: Message[], s: Message): string {
+    return stepRole(steps, s, this.state.pedalSets);
+  }
+
+  clash(list: Message[], i: number): ClashResult | null {
+    return clash(list, i, this.state.pedalSets);
+  }
+
+  setCtrlMin(ctrlMin: boolean) {
+    this.set({ ctrlMin, colorPickerOpen: false });
+  }
+
+  toggleCtrlMin() {
+    this.set({ ctrlMin: !this.state.ctrlMin, colorPickerOpen: false });
+  }
+
+  setDrag(drag: DragState | null) {
+    this.set({ drag });
+  }
+
+  setPeek(peek: PeekState | null) {
+    this.set({ peek });
+  }
+
+  setMode(mode: 'assign' | 'build', actEdit: string | null = mode === 'assign' ? null : this.state.actEdit) {
+    this.set({ mode, actEdit, popoverControlId: null, notice: null, focus: null });
+  }
+
+  setEdPick(edPick: number | null) {
+    this.set({ edPick });
+  }
+
+  setFocus(focus: string | null) {
+    this.set({ focus });
+  }
+
+  setLibOpen(libOpen: boolean) {
+    this.set({ libOpen });
+  }
+
+  toggleLibOpen() {
+    this.set({ libOpen: !this.state.libOpen });
+  }
+
+  toggleCapOpen(cap: string) {
+    this.set({ capOpen: { ...this.state.capOpen, [cap]: !this.state.capOpen[cap] } });
+  }
+
+  setLens(lens: CapabilityId | null) {
+    this.set({ lens: this.state.lens === lens ? null : lens });
+  }
+
+  setHintOpen(hintOpen: string | null) {
+    this.set({ hintOpen: this.state.hintOpen === hintOpen ? null : hintOpen });
+  }
+
+  toggleHintAll() {
+    this.set({ hintAll: !this.state.hintAll, hintOpen: null });
+  }
+
+  setNotice(notice: string | null) {
+    this.set({ notice });
+  }
+
+  setJumpOpen(jumpOpen: boolean) {
+    this.set({ jumpOpen });
+  }
+
+  closeConflict() {
+    this.set({ conflict: null });
+  }
+
+  setSetupStep(setupStep: 1 | 2 | 3 | null) {
+    this.set({ setupStep });
+  }
+
+  finishSetup(skipped: boolean) {
+    const st = this.state;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('stomp-stacks:setup-done', '1');
+      }
+    } catch {
+      // ignore
+    }
+    this.set({ setupStep: null });
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    const brain = BRAINS[st.brainId] || BRAINS.scribble;
+    this.pushLog({
+      text: skipped ? 'setup skipped' : 'rig set',
+      sub: `${ctrl.short} · ${brain.short} · ${st.rig.length} ${st.rig.length === 1 ? 'pedal' : 'pedals'}`,
+      tone: 'ok',
+    });
+  }
+
+  rerunSetup() {
+    this.set({ setupStep: 1, settingsOpen: false });
+  }
+
   selectSwitch(key: string) {
-    this.set({ selectedKey: key, popoverControlId: null });
+    this.set({ selectedKey: key, popoverControlId: null, edPick: null });
   }
 
   selectBank(i: number) {
-    this.set({ bank: i, popoverControlId: null });
+    const maxBank = Math.max(0, this.state.banks.length - 1);
+    const clamped = Math.max(0, Math.min(maxBank, i));
+    this.set({ bank: clamped, popoverControlId: null, jumpOpen: false, edPick: null });
   }
 
   selectAction(action: ActionId) {
-    this.set({ action, popoverControlId: null });
+    this.set({ action, popoverControlId: null, edPick: null });
   }
 
   setBrowseDevice(id: string) {
@@ -296,7 +1122,7 @@ export class StompStore extends EventTarget {
   }
 
   closePopover() {
-    this.set({ popoverControlId: null });
+    this.set({ popoverControlId: null, drag: null });
   }
 
   setFace(face: FaceMode) {
@@ -343,13 +1169,19 @@ export class StompStore extends EventTarget {
     this.set({ colorPickerOpen: false });
   }
 
-  namingTargets(): NamingTargetDef[] {
+  namingTargets(): Array<NamingTargetDef & { id: string }> {
     const ids = [this.state.controllerId];
-    if (this.state.brainId === 'scribble') ids.push('scribble');
-    return ids.filter((id) => NAMING[id]).map((id) => ({ ...NAMING[id] }));
+    if (this.state.brainId === 'scribble' && !ids.includes('scribble')) ids.push('scribble');
+    return ids
+      .filter((id) => NAMING[id])
+      .map((id) => ({
+        ...NAMING[id],
+        id,
+        ...(id === 'scribble' && this.state.controllerId === 'scribble' ? { role: 'controller · brain' as any } : {}),
+      }));
   }
 
-  displayTargets(): NamingTargetDef[] {
+  displayTargets(): Array<NamingTargetDef & { id: string }> {
     return this.namingTargets().filter((t) => t.name > 0);
   }
 
@@ -374,9 +1206,10 @@ export class StompStore extends EventTarget {
     const step: MacroStep = firstStep;
     const d = HardwareRegistry.getDevice(step.device);
     if (!d) return '';
-    const c = HardwareRegistry.getControl(step.device, step.control);
+    const c = step.control === 'pc' ? null : HardwareRegistry.getControl(step.device, step.control);
     const ceiling = this.displayTargets().reduce((m, t) => Math.min(m, t.name), 24);
-    return trunc(n > 1 ? `${d.name} +${n - 1}` : `${d.name} ${c ? c.short : ''}`, ceiling);
+    const shortName = step.control === 'pc' ? 'set-up' : c ? c.short : '';
+    return trunc(n > 1 ? `${d.name} +${n - 1}` : `${d.name} ${shortName}`, ceiling);
   }
 
   autoSecondary(bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey): string {
@@ -389,11 +1222,13 @@ export class StompStore extends EventTarget {
     return parts.join(' · ');
   }
 
-  ident(bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey): IdentResult {
-    const key = `${bankIndex}:${switchKey}`;
+  ident(bankIndex: number = this.state.bank, switchKey?: string): IdentResult {
+    const ctrl = CONTROLLERS[this.state.controllerId] || CONTROLLERS.chocolate;
+    const resolvedKey = switchKey ?? (ctrl.nav ? ctrl.keys[0] : this.state.selectedKey);
+    const key = `${bankIndex}:${resolvedKey}`;
     const n = this.state.naming[key] || {};
-    const auto = this.autoName(bankIndex, switchKey);
-    const autoSec = this.autoSecondary(bankIndex, switchKey);
+    const auto = this.autoName(bankIndex, resolvedKey);
+    const autoSec = this.autoSecondary(bankIndex, resolvedKey);
     const color = n.color || null;
     const bg = color ? HEX[color] : '#16323d';
     return {
@@ -408,8 +1243,10 @@ export class StompStore extends EventTarget {
     };
   }
 
-  setIdent(patch: Partial<PresetNaming>, bankIndex: number = this.state.bank, switchKey: string = this.state.selectedKey) {
-    const key = `${bankIndex}:${switchKey}`;
+  setIdent(patch: Partial<PresetNaming>, bankIndex: number = this.state.bank, switchKey?: string) {
+    const ctrl = CONTROLLERS[this.state.controllerId] || CONTROLLERS.chocolate;
+    const resolvedKey = switchKey ?? (ctrl.nav ? ctrl.keys[0] : this.state.selectedKey);
+    const key = `${bankIndex}:${resolvedKey}`;
     const naming = { ...this.state.naming, [key]: { ...this.state.naming[key], ...patch } };
     this.set({ naming });
   }
@@ -428,14 +1265,18 @@ export class StompStore extends EventTarget {
   /** Switching controllers starts a fresh set of stacks. */
   switchController(id: string) {
     const ctrl = HardwareRegistry.getController(id);
+    const action = ctrl.actions && !ctrl.actions.includes(this.state.action) ? ctrl.actions[0] : this.state.action;
     this.set({
       controllerId: id,
+      ...(ctrl.isBrain ? { brainId: 'scribble' } : {}),
       banks: MacroStackModel.createBanks(id),
       bank: 0,
       selectedKey: ctrl.keys[0],
+      action,
       controllerPickerOpen: false,
       popoverControlId: null,
       colorPickerOpen: false,
+      jumpOpen: false,
     });
   }
 
@@ -478,10 +1319,11 @@ export class StompStore extends EventTarget {
     const actLabel = act ? act.label : st.action;
 
     if (!list.length) {
-      this.pushLog({ text: `switch ${st.selectedKey} · ${actLabel}`, sub: 'nothing stacked here', tone: 'warn' });
+      this.pushLog({ text: `switch ${st.selectedKey} · ${actLabel}`, sub: 'nothing on this press', tone: 'warn' });
       return;
     }
 
+    this.set({ firing: st.selectedKey });
     this.pushLog({
       text: `▸ switch ${st.selectedKey} · ${actLabel}`,
       sub: `${list.length} ${list.length === 1 ? 'message' : 'messages'} out`,
@@ -490,27 +1332,35 @@ export class StompStore extends EventTarget {
 
     list.forEach((s, i) => {
       setTimeout(() => {
-        const dev = DEVICES[s.device];
-        if (!dev) return;
-        const c = dev.controls.find((x) => x.id === s.control);
-        const ch = st.channels[s.device] || 1;
-        const baseCc = c ? c.cc : 10;
-        const offset = st.offsets[s.device] || 0;
-        const cc = baseCc + offset;
-        const val = s.value === null ? 127 : s.value;
-        const live = !!st.conn[s.device];
+        const d = describeStep(s, st.channels, st.pedalSets, st.offsets);
+        const live = !!this.state.conn[s.device];
 
         if (live) {
-          midiService.sendControlChange(ch, cc, val);
+          if (d.pc) {
+            midiService.sendProgramChange(d.channel, d.value);
+          } else {
+            midiService.sendControlChange(d.channel, d.cc ?? 0, d.value);
+          }
         }
 
         this.pushLog({
-          text: `${hex(176 + ch - 1)} ${hex(cc)} ${hex(val)}`,
-          sub: live ? `${dev.name} · ${c ? c.label : s.control}` : `${dev.name} never answered — is it plugged in?`,
+          text: d.bytes.map(hex).join(' '),
+          sub: live ? `${d.deviceName} · ${d.label}` : `${d.deviceName} never answered — is it plugged in?`,
           tone: live ? 'out' : 'warn',
         });
+
+        this.set({ lit: { device: s.device, control: s.control } });
+        setTimeout(() => {
+          if (this.state.lit && this.state.lit.control === s.control) {
+            this.set({ lit: null });
+          }
+        }, 280);
       }, 110 * i);
     });
+
+    setTimeout(() => {
+      this.set({ firing: null });
+    }, 110 * list.length + 260);
   }
 
   simScribblePresets(): ReadPresetSlot[] {
@@ -522,14 +1372,14 @@ export class StompStore extends EventTarget {
     return SLOTS.map((n, i) => {
       const d1 = pool[i % pool.length];
       const dev1 = DEVICES[d1];
-      const foots = dev1 ? dev1.controls.filter((c) => c.type === 'foot') : [];
+      const foots = dev1 ? dev1.controls.filter((c) => c.type === 'foot' && !c.sub) : [];
       const c1 = foots[i % Math.max(foots.length, 1)] || (dev1 ? dev1.controls[0] : null);
       const steps: MacroStep[] = c1 ? [{ device: d1, control: c1.id, value: null }] : [];
 
       if (i % 3 !== 2 && pool.length > 1) {
         const d2 = pool[(i + 1) % pool.length];
         const dev2 = DEVICES[d2];
-        const knobs = dev2 ? dev2.controls.filter((c) => c.type === 'knob') : [];
+        const knobs = dev2 ? dev2.controls.filter((c) => c.type === 'knob' && !c.sub) : [];
         const c2 = knobs[i % Math.max(knobs.length, 1)] || (dev2 ? dev2.controls[0] : null);
         if (c2) {
           steps.push({ device: d2, control: c2.id, value: 16 * ((i % 7) + 1) });
@@ -657,7 +1507,6 @@ export class StompStore extends EventTarget {
       },
     });
   }
-
 
   async readLiveUsbSerial() {
     this.set({
@@ -793,7 +1642,7 @@ export class StompStore extends EventTarget {
     this.set({ readData: { ...this.state.readData, filter } });
   }
 
-  setReadDest(n: number, value: string) {
+  setReadDest(n: number, value: string, bankIdx?: number) {
     if (!this.state.readData) return;
     const dest = { ...this.state.readData.dest };
     if (!value) {
@@ -802,10 +1651,20 @@ export class StompStore extends EventTarget {
       const parts = value.split(':');
       dest[n] = {
         key: parts[0],
-        action: parts[1] as ActionId,
+        bank: bankIdx ?? this.state.bank,
+        action: (parts[1] as ActionId) || this.state.action,
         mode: dest[n]?.mode || 'replace',
       };
     }
+    this.set({ readData: { ...this.state.readData, dest } });
+  }
+
+  setReadDestAction(n: number, action: ActionId) {
+    if (!this.state.readData || !this.state.readData.dest[n]) return;
+    const dest = {
+      ...this.state.readData.dest,
+      [n]: { ...this.state.readData.dest[n], action },
+    };
     this.set({ readData: { ...this.state.readData, dest } });
   }
 
@@ -827,7 +1686,6 @@ export class StompStore extends EventTarget {
       .map((p) => ({ p, d: read.dest[p.n] }));
 
     const st = this.state;
-    const bankIdx = st.bank;
 
     const updatedBanks = st.banks.map((b) => {
       const nb: Bank = {};
@@ -840,17 +1698,18 @@ export class StompStore extends EventTarget {
     const updatedNaming = { ...st.naming };
 
     picks.forEach(({ p, d }) => {
-      const slot = updatedBanks[bankIdx]?.[d.key];
+      const bi = d.bank ?? st.bank;
+      const slot = updatedBanks[bi]?.[d.key];
       if (!slot) return;
 
       if (d.mode === 'add') {
-        slot[d.action] = [...slot[d.action], ...p.steps.map((x) => ({ ...x }))].slice(0, MAX_STEPS);
+        slot[d.action] = [...slot[d.action], ...p.steps.map((x) => ({ ...x }))].slice(0, this.limit());
       } else {
         slot[d.action] = p.steps.map((x) => ({ ...x }));
       }
 
       if (d.mode === 'replace') {
-        const namingKey = `${bankIdx}:${d.key}`;
+        const namingKey = `${bi}:${d.key}`;
         updatedNaming[namingKey] = {
           name: p.label,
           secondary: p.second,
@@ -859,10 +1718,18 @@ export class StompStore extends EventTarget {
       }
     });
 
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
     this.pushLog({
-      text: picks.length ? `pulled ${picks.length} ${picks.length === 1 ? 'preset' : 'presets'} in` : 'took nothing',
+      text: picks.length ? `pulled ${picks.length} ${picks.length === 1 ? 'preset in' : 'presets in'}` : 'took nothing',
       sub: picks.length
-        ? picks.map((x) => `p${String(x.p.n).padStart(3, '0')} → ${x.d.key}`).join(', ')
+        ? picks
+            .map(
+              (x) =>
+                `p${String(x.p.n).padStart(3, '0')} → ${
+                  ctrl.nav ? `slot ${String((x.d.bank || 0) + 1).padStart(3, '0')}` : `switch ${x.d.key}`
+                }`,
+            )
+            .join(', ')
         : 'left the rig as it was',
       tone: 'ok',
     });
@@ -874,10 +1741,6 @@ export class StompStore extends EventTarget {
       readData: null,
     });
   }
-
-
-
-
 
   togglePresetSelection(presetId: string) {
     if (!this.state.readData || !this.state.readData.allPresets) return;
@@ -979,8 +1842,6 @@ export class StompStore extends EventTarget {
     });
   }
 
-
-
   pickReadRow(_index: number, _side: 'app' | 'device') {
     // Legacy helper
   }
@@ -988,7 +1849,6 @@ export class StompStore extends EventTarget {
   applyRead() {
     this.importSelectedDevicePresets();
   }
-
 
   cancelRead() {
     this.set({ readOpen: false, readData: null });
@@ -1001,7 +1861,7 @@ export class StompStore extends EventTarget {
     const dev = DEVICES[id];
     if (!dev) return;
 
-    const driftMap: Record<string, number> = { blooper: 4, mood: 0, elcap: -2 };
+    const driftMap: Record<string, number> = { blooper: 0, mood: 0, elcap: 4, genloss: -2 };
     const drift = driftMap[id] || 0;
     const c = dev.controls[2] || dev.controls[0];
     const baseCc = c ? c.cc : 10;
@@ -1052,3 +1912,4 @@ export class StompStore extends EventTarget {
   }
 }
 
+export { CAPS };

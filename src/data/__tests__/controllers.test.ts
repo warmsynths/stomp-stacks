@@ -3,7 +3,7 @@ import { CONTROLLERS, CONTROLLER_ORDER, ACTIONS } from '../controllers.js';
 
 describe('Controller Dictionary Data', () => {
   it('contains all required controllers in CONTROLLER_ORDER', () => {
-    expect(CONTROLLER_ORDER).toEqual(['chocolate', 'mc3']);
+    expect(CONTROLLER_ORDER).toEqual(['chocolate', 'mc3', 'scribble']);
     CONTROLLER_ORDER.forEach((id) => {
       expect(CONTROLLERS[id]).toBeDefined();
       expect(CONTROLLERS[id].id).toBe(id);

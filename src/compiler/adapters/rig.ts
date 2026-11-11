@@ -58,11 +58,12 @@ export function compileRigJson(state: StompState) {
         ACTIONS.forEach((a) => {
           if (b[k][a.id].length) {
             outActions[a.id] = b[k][a.id].map((s: MacroStep) => {
-              const d = describeStep(s, state.channels);
+              const d = describeStep(s, state.channels, state.pedalSets, state.offsets);
               return {
                 pedal: s.device,
                 control: s.control,
-                value: s.value === null || s.value === undefined ? (s.control === 'pc' ? 0 : MAX_VALUE) : s.value,
+                value: s.value === null || s.value === undefined ? (d.pc ? d.value : MAX_VALUE) : s.value,
+                ...(s.set ? { set: s.set } : {}),
                 label: d.stepLabel || d.label,
               };
             });

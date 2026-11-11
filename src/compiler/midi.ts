@@ -30,8 +30,8 @@ const ADAPTES_MAP: Record<string, TargetAdapter> = {
 
 /** Diagnostic validation engine for detecting stack depth, channel, and hardware mismatches. */
 export function findIssues(state: StompState): IssueItem[] {
-  const brain = HardwareRegistry.getBrain(state.brainId);
   const ctrl = HardwareRegistry.getController(state.controllerId);
+  const brain = ctrl.isBrain ? HardwareRegistry.getBrain('scribble') : HardwareRegistry.getBrain(state.brainId);
   const out: IssueItem[] = [];
 
   let over = 0;
@@ -48,7 +48,7 @@ export function findIssues(state: StompState): IssueItem[] {
     out.push({
       type: 'warn',
       text: `${over} stack${over === 1 ? '' : 's'} run to ${worst} messages — ${brain.full.toLowerCase()} sends ${brain.maxSteps}${
-        state.brainId === 'none' ? '. this is the case for a brain.' : '. trim them or move up.'
+        state.brainId === 'none' && !ctrl.isBrain ? '. this is the case for a brain.' : '. trim them or move up.'
       }`,
     });
   }
@@ -60,7 +60,7 @@ export function findIssues(state: StompState): IssueItem[] {
     });
   }
 
-  if (state.brainId === 'onboard' && !ctrl.onboard) {
+  if (!ctrl.isBrain && state.brainId === 'onboard' && !ctrl.onboard) {
     out.push({
       type: 'warn',
       text: `${ctrl.name} can't hold stacks onboard — it only sends one message per switch.`,
@@ -92,10 +92,43 @@ export function findIssues(state: StompState): IssueItem[] {
     });
   }
 
-  if (state.targetId === 'scribble' && state.brainId !== 'scribble') {
+  if (state.targetId === 'scribble' && state.brainId !== 'scribble' && !ctrl.isBrain) {
     out.push({
       type: 'warn',
       text: `building a scribble config, but the brain is set to ${brain.full.toLowerCase()}.`,
+    });
+  }
+
+  // Set-up order & unsaved Set-up checks
+  const usedSets: Record<string, boolean> = {};
+  let latePc = 0;
+  eachStack(state, (_bi, _k, _ki, _a, list) => {
+    let seenDev: Record<string, boolean> = {};
+    list.forEach((s) => {
+      if (s.control === 'pc') {
+        if (s.set) usedSets[s.set] = true;
+        if (seenDev[s.device]) latePc++;
+      } else {
+        seenDev[s.device] = true;
+      }
+    });
+  });
+  if (latePc) {
+    out.push({
+      type: 'warn',
+      text: `${latePc} ${latePc === 1 ? 'set-up loads' : 'set-ups load'} after ${latePc === 1 ? 'its' : 'their'} own knob messages — loading a preset resets the pedal's knobs, so put it first.`,
+    });
+  }
+  const sets = state.pedalSets || [];
+  const unsaved = Object.keys(usedSets)
+    .map((id) => sets.find((x) => x.id === id))
+    .filter((s): s is NonNullable<typeof s> => !!s && !s.saved);
+  if (unsaved.length) {
+    out.push({
+      type: 'warn',
+      text: `${unsaved.map((s) => `“${s.name}” (slot ${s.slot})`).join(' + ')} ${
+        unsaved.length === 1 ? "hasn't" : "haven't"
+      } been saved to the pedal yet — open set-ups for the 4-step walkthrough.`,
     });
   }
 
@@ -104,7 +137,7 @@ export function findIssues(state: StompState): IssueItem[] {
     state,
     namingTargets() {
       const ids = [state.controllerId];
-      if (state.brainId === 'scribble') ids.push('scribble');
+      if (state.brainId === 'scribble' && !ids.includes('scribble')) ids.push('scribble');
       return ids.filter((id) => NAMING[id]).map((id) => ({ ...NAMING[id] }));
     },
     displayTargets() {

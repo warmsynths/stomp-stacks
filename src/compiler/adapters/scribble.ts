@@ -49,8 +49,8 @@ export function compileScribbleMacroJson(state: StompState) {
         textColour,
       },
       messages: list.map((s) => {
-        const d = describeStep(s, state.channels);
-        return [d.message.statusByte, d.message.dataByte1, d.message.dataByte2];
+        const d = describeStep(s, state.channels, state.pedalSets, state.offsets);
+        return d.bytes;
       }),
     });
   });

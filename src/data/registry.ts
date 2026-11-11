@@ -5,6 +5,7 @@ import { DEVICES, DEVICE_ORDER, type Device, type DeviceControl, type ControlVal
 import { CONTROLLERS, CONTROLLER_ORDER, type ControllerDef } from './controllers.js';
 import { BRAINS, BRAIN_ORDER, type BrainDef } from './brains.js';
 import { TARGETS, type TargetDef } from './targets.js';
+import { knobWord } from '../state/macro-stack-model.js';
 
 export class HardwareRegistry {
   private static controlMap: Map<string, DeviceControl> = new Map();
@@ -55,6 +56,7 @@ export class HardwareRegistry {
     if (value !== null && value !== undefined) {
       const opt = HardwareRegistry.valueOptionsFor(control).find((v) => v.value === value);
       if (opt) label += ' · ' + opt.label;
+      else if (control.type === 'knob') label += ' · ' + knobWord(value);
     }
     return label;
   }

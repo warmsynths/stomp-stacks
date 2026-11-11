@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
+import { CONTROLLERS } from '../data/controllers.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 
@@ -14,8 +15,8 @@ export class WireMonitor extends LitElement {
       :host {
         display: block;
         flex: none;
-        border-top: 2.5px solid var(--ink);
-        background: var(--card);
+        border-top: 2.5px solid #16323d;
+        background: #fffbf0;
         padding: 12px 18px;
         animation: sheetIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
       }
@@ -25,81 +26,37 @@ export class WireMonitor extends LitElement {
         gap: 9px;
         padding-bottom: 9px;
       }
-      .live-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #5bb85b;
-        border: 1.5px solid var(--ink);
-        box-shadow: 0 0 6px #5bb85b;
-      }
       .label {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        opacity: 0.55;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
         flex: 1;
+        opacity: 0.72;
       }
       .btn-clear {
-        font-family: var(--mono);
-        font-size: 10px;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 12px;
         opacity: 0.5;
-        padding: 2px 6px;
-        transition: opacity 150ms ease;
       }
       .btn-clear:hover {
         opacity: 1;
       }
       .btn-stomp {
-        padding: 5px 13px;
+        padding: 6px 13px;
         border-radius: 16px;
-        background: var(--mustard);
-        border: 2px solid var(--ink);
-        box-shadow: 2px 2px 0 var(--ink);
-        font-family: var(--mono);
-        font-size: 11px;
+        background: #f7c948;
+        border: 2px solid #16323d;
+        box-shadow: 2px 2px 0 #16323d;
+        font-size: 12px;
         font-weight: 600;
         transition:
-          transform 150ms ease,
-          box-shadow 150ms ease;
+          transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+          box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
       }
       .btn-stomp:active {
         transform: translate(1px, 1px);
-        box-shadow: 1px 1px 0 var(--ink);
-      }
-      .log-area {
-        max-height: 110px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        font-family: var(--mono);
-        font-size: 11px;
-      }
-      .log-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        line-height: 1.45;
-      }
-      .log-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        flex: none;
-      }
-      .log-text {
-        font-weight: 500;
-      }
-      .log-sub {
-        opacity: 0.55;
-        margin-left: 6px;
-      }
-      .empty-note {
-        font-family: var(--mono);
-        font-size: 11px;
-        opacity: 0.4;
+        box-shadow: 1px 1px 0 #16323d;
       }
     `,
   ];
@@ -116,33 +73,61 @@ export class WireMonitor extends LitElement {
     const st = this.store.state;
     if (!st.monitorOn) return null;
 
+    const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
+    const nLive = Object.keys(st.conn).filter((k) => st.conn[k]).length;
+    const railLabel = nLive
+      ? `the wire · ${nLive} connected`
+      : 'the wire · preview — nothing plugged in yet';
+    const liveDotStyle = `flex:none;width:8px;height:8px;border-radius:50%;border:1.5px solid #16323d;background:${
+      nLive ? '#5bb85b' : '#f7c948'
+    };${nLive ? 'box-shadow:0 0 6px #5bb85b' : ''}`;
+    const stompLabel = ctrl.nav
+      ? `fire preset ${String(st.bank + 1).padStart(3, '0')}`
+      : `stomp ${st.selectedKey}`;
+    const logStyle = `max-height:92px;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:4px;font-family:'DM Mono',monospace;font-size:11.5px;${
+      st.log.length > 3
+        ? 'mask-image:linear-gradient(to bottom,transparent 0,#000 18px);-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px)'
+        : ''
+    }`;
+
     return html`
       <div class="head">
-        <span class="live-dot"></span>
-        <span class="label">wire monitor</span>
-        <button class="btn-clear" @click=${() => this.store.clearLog()}>clear</button>
-        <button class="btn-stomp" @click=${() => this.store.stompTest()}>stomp now</button>
+        <span style=${liveDotStyle}></span>
+        <span class="label">${railLabel}</span>
+        ${st.log.length
+          ? html`<button class="btn-clear" @click=${() => this.store.clearLog()}>clear</button>`
+          : null}
+        <button class="btn-stomp" @click=${() => this.store.stompTest()}>${stompLabel}</button>
       </div>
-      <div class="log-area">
+      <div style=${logStyle}>
         ${st.log.length === 0
-          ? html`<div class="empty-note">quiet on the wire — stomp something</div>`
-          : st.log.map((l) => {
-              const dotBg =
-                l.tone === 'trig'
-                  ? '#5bb85b'
-                  : l.tone === 'warn'
-                  ? 'var(--mustard)'
-                  : l.tone === 'in' || l.tone === 'out'
-                  ? 'var(--sky)'
-                  : '#5bb85b';
-              return html`
-                <div class="log-row">
-                  <span class="log-dot" style="background:${dotBg}"></span>
-                  <span class="log-text">${l.text}</span>
-                  <span class="log-sub">${l.sub}</span>
-                </div>
-              `;
-            })}
+          ? html`<div style="opacity:.4;padding:4px 0">
+              quiet on the wire — hit stomp or twist a knob in a popover to watch messages go out.
+            </div>`
+          : [...st.log]
+              .slice(-18)
+              .reverse()
+              .map((l) => {
+                const dotColor =
+                  l.tone === 'trig'
+                    ? '#f7c948'
+                    : l.tone === 'out'
+                      ? '#8fd0e6'
+                      : l.tone === 'in'
+                        ? '#e56b55'
+                        : l.tone === 'warn'
+                          ? '#f7c948'
+                          : '#5bb85b';
+                return html`
+                  <div style="display:flex;align-items:baseline;gap:9px;line-height:1.45">
+                    <span
+                      style="flex:none;width:7px;height:7px;border-radius:50%;border:1.5px solid #16323d;transform:translateY(-1px);background:${dotColor}"
+                    ></span>
+                    <span style="font-weight:500">${l.text}</span>
+                    <span style="opacity:.52;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.sub}</span>
+                  </div>
+                `;
+              })}
       </div>
     `;
   }

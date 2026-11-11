@@ -20,7 +20,7 @@ export const BRAINS: Record<string, BrainDef> = {
     icon: '▤',
     colour: '#8fd0e6',
     maxSteps: 8,
-    banks: 16,
+    banks: 128,
     notes: [
       'Pirate MIDI Scribble Relay Hub: USB-C Host / TRS / BLE relay box.',
       'Macro Capacity: Stores up to 8 MIDI messages per switch action across 16 banks (128 presets total).',

@@ -172,9 +172,18 @@ export class SettingsModal extends LitElement {
       .foot {
         flex: none;
         display: flex;
+        align-items: center;
         justify-content: flex-end;
         padding: 16px 24px;
         border-top: 2.5px solid var(--ink);
+      }
+      .btn-rerun {
+        margin-right: auto;
+        padding: 9px 15px;
+        border-radius: 20px;
+        border: 2.5px solid #16323d;
+        background: #f7f1e3;
+        font-size: 13px;
       }
       .btn-done {
         padding: 10px 20px;
@@ -310,7 +319,10 @@ export class SettingsModal extends LitElement {
                 `
               : null}
           </div>
-          <div class="foot"><button class="btn-done" @click=${() => this.store.closeSettings()}>done</button></div>
+          <div class="foot">
+            <button class="btn-rerun" @click=${() => this.store.rerunSetup()}>walk me through the rig again</button>
+            <button class="btn-done" @click=${() => this.store.closeSettings()}>done</button>
+          </div>
         </div>
       </div>
     `;

@@ -12,15 +12,15 @@ describe('HardwareRegistry', () => {
   it('performs O(1) control lookup across devices', () => {
     const ctrl = HardwareRegistry.getControl('blooper', 'volume');
     expect(ctrl?.cc).toBe(14);
-    expect(ctrl?.label).toBe('Ramp / Volume');
+    expect(ctrl?.label).toBe('Volume (loop level)');
 
     const missing = HardwareRegistry.getControl('blooper', 'nonexistent');
     expect(missing).toBeUndefined();
   });
 
   it('formats control labels with optional discrete value labels', () => {
-    expect(HardwareRegistry.formatControlLabel('blooper', 'volume', 64)).toBe('Ramp / Volume · noon');
-    expect(HardwareRegistry.formatControlLabel('blooper', 'record', null)).toBe('Record');
+    expect(HardwareRegistry.formatControlLabel('blooper', 'volume', 64)).toBe('Volume (loop level) · noon');
+    expect(HardwareRegistry.formatControlLabel('blooper', 'record', null)).toBe('Left switch (Rec / Play / Dub / Mod A)');
   });
 
   it('finds next available MIDI channel without collisions', () => {
@@ -35,7 +35,7 @@ describe('HardwareRegistry', () => {
     const collisions = HardwareRegistry.detectChannelCollisions(rig, channels);
     expect(collisions).toHaveLength(1);
     expect(collisions[0].channel).toBe(1);
-    expect(collisions[0].devices).toEqual(['blooper', 'MOOD']);
+    expect(collisions[0].devices).toEqual(['blooper', 'mood']);
   });
 
   it('converts device accent hex to RGB integer', () => {

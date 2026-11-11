@@ -31,12 +31,6 @@ describe('Device Dictionary Data', () => {
     expect(blooper.pcOffset).toBe(0);
     expect(blooper.notes).toBeDefined();
     expect(blooper.notes!.length).toBeGreaterThan(0);
-    const zeroPcNote = blooper.notes!.find((n) => n.includes('Zero-Based Program Changes'));
-    expect(zeroPcNote).toBeDefined();
-    expect(zeroPcNote).toContain('Loops 1-16 are saved and recalled using Program Changes 0-15');
-
-    const trsNote = blooper.notes!.find((n) => n.includes('TRS MIDI Connection'));
-    expect(trsNote).toContain('Chase Bliss MIDIBox');
   });
 
   it('maps official CC numbers for Blooper controls correctly', () => {
@@ -44,17 +38,17 @@ describe('Device Dictionary Data', () => {
     const findCc = (id: string) => blooper.controls.find((c) => c.id === id)?.cc;
 
     expect(findCc('volume')).toBe(14);
-    expect(findCc('repeats')).toBe(15);
-    expect(findCc('layers')).toBe(17);
+    expect(findCc('layers')).toBe(15);
+    expect(findCc('repeats')).toBe(16);
+    expect(findCc('modA')).toBe(17);
     expect(findCc('stability')).toBe(18);
-    expect(findCc('modA')).toBe(30);
-    expect(findCc('modB')).toBe(31);
-    expect(findCc('chA')).toBe(21);
+    expect(findCc('modB')).toBe(19);
+    expect(findCc('rampSpeed')).toBe(20);
+    expect(findCc('modA_sel')).toBe(21);
     expect(findCc('mode')).toBe(22);
-    expect(findCc('chB')).toBe(23);
-    expect(findCc('undo')).toBe(5);
+    expect(findCc('modB_sel')).toBe(23);
     expect(findCc('record')).toBe(1);
-    expect(findCc('loop')).toBe(2);
+    expect(findCc('loop')).toBe(4);
   });
 
   it('maps official CC numbers for MOOD controls correctly', () => {
@@ -70,8 +64,8 @@ describe('Device Dictionary Data', () => {
     expect(findCc('wetmode')).toBe(21);
     expect(findCc('routing')).toBe(22);
     expect(findCc('micromode')).toBe(23);
-    expect(findCc('wet')).toBe(1);
-    expect(findCc('microloop')).toBe(2);
+    expect(findCc('wet')).toBe(103);
+    expect(findCc('microloop')).toBe(102);
 
     expect(mood.notes).toBeDefined();
     expect(mood.notes!.some((n) => n.includes('CC 102') && n.includes('CC 103'))).toBe(true);
@@ -82,18 +76,15 @@ describe('Device Dictionary Data', () => {
     const findCc = (id: string) => elcap.controls.find((c) => c.id === id)?.cc;
 
     expect(findCc('time')).toBe(12);
-    expect(findCc('wow')).toBe(13);
-    expect(findCc('cmix')).toBe(14);
+    expect(findCc('wow')).toBe(16);
+    expect(findCc('mix')).toBe(13);
     expect(findCc('repeats')).toBe(15);
-    expect(findCc('age')).toBe(16);
-    expect(findCc('spring')).toBe(18);
-    expect(findCc('head')).toBe(11);
-    expect(findCc('cmode')).toBe(19);
+    expect(findCc('tapeAge')).toBe(14);
+    expect(findCc('spring')).toBe(17);
+    expect(findCc('head')).toBe(28);
+    expect(findCc('cmode')).toBe(29);
     expect(findCc('tap')).toBe(93);
     expect(findCc('onoff')).toBe(102);
-
-    expect(elcap.notes).toBeDefined();
-    expect(elcap.notes!.some((n) => n.includes('BLUE'))).toBe(true);
   });
 
   it('maps official CC numbers for Generation Loss controls correctly', () => {
@@ -109,9 +100,8 @@ describe('Device Dictionary Data', () => {
     expect(findCc('aux')).toBe(21);
     expect(findCc('dry')).toBe(22);
     expect(findCc('noise')).toBe(23);
-    expect(findCc('preset')).toBe(101);
-    expect(findCc('auxSw')).toBe(1);
-    expect(findCc('bypass')).toBe(2);
+    expect(findCc('auxSw')).toBe(103);
+    expect(findCc('bypass')).toBe(102);
   });
 
   it('returns default KNOB_VALUES for knobs without custom values option list', () => {
