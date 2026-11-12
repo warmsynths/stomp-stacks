@@ -3,6 +3,7 @@ import type { ColorName, TextColorName } from '../data/naming.js';
 import type { CapabilityId } from '../data/capabilities.js';
 import type { ActionDef } from '../data/actions.js';
 import type { PedalSetup, SetupDeviceId } from '../data/setups.js';
+import type { ScribbleFirmwareInfo } from '../types/scribble.js';
 
 export interface Message {
   device: string;
@@ -194,6 +195,8 @@ export interface StompState {
   monitorOn: boolean;
   log: WireLogEntry[];
   seq: number;
+  /** Detected or targeted Scribble firmware version information. */
+  scribbleFirmware: ScribbleFirmwareInfo;
 
   // --- v3 State Fields ---
   /** Collapses the top controller card to a compact two-line summary bar. */

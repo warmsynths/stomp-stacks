@@ -51,7 +51,7 @@ export interface ScribbleMidiMessage {
  */
 export interface ScribbleSmartMessage {
   statusByte: number;
-  smartType: 'blockingDelay' | 'sendCurrentPreset';
+  smartType: 'blockingDelay' | 'sendCurrentPreset' | 'setTempo' | 'changeTempo';
   dataByte1: number; // 0-255
   dataByte2: number; // 0-255
 }
@@ -82,6 +82,9 @@ export type ScribbleSwitchMode =
   | 'pressPresetDown'
   | 'holdPresetUp'
   | 'holdPresetDown'
+  | 'presetUp'
+  | 'presetDown'
+  | 'tapTempo'
   | 'midiOnly';
 
 export interface ScribbleGlobalSwitchSetting {
@@ -125,10 +128,13 @@ export interface ScribbleGlobalSettings {
   displayBrightness: number; // 1-100
   midiChannel: number; // 0-15 (zero-based, unlike the 1-16 shown in most UIs)
   globalBpm: number;
-  midiOutPortMode: 'midiOutA' | 'midiOutB';
+  midiOutPortMode: 'midiOutA' | 'midiOutB' | 'typeA' | 'typeB';
   clockMode: ScribbleClockMode;
   clockDisplayType: ScribbleClockDisplayType;
-  pcBankOutputs: PcBankOutputs;
+  pcBankOutputs?: PcBankOutputs;
+  bankPcMidiOutputs?: PcBankOutputs;
+  tapTempoQuant?: string;
+  zeroIndexBanks?: boolean;
   usbdThruHandles: PortHandles;
   bleThruHandles: PortHandles;
   midi1ThruHandles: PortHandles;
@@ -174,8 +180,51 @@ export type ScribblePresetSetting = ScribbleBankSetting;
 export interface ScribbleConfig {
   deviceSettings: ScribbleDeviceSettings;
   globalSettings: ScribbleGlobalSettings;
-  bankSettings: ScribbleBankSetting[]; // up to 128
-  presetSettings?: ScribbleBankSetting[];
+  bankSettings?: ScribbleBankSetting[]; // up to 128 (v1.0 schema)
+  presetSettings?: ScribbleBankSetting[]; // up to 128 (v2.0 schema)
+}
+
+export interface ScribbleFirmwareInfo {
+  version: string;
+  major: 'v1' | 'v2';
+  detectedFrom?: 'metadata' | 'schema' | 'default' | 'manual' | 'device' | 'file';
+}
+
+/** Inspects a Scribble configuration file or device response and detects the firmware generation. */
+export function detectScribbleFirmwareVersion(config: any): ScribbleFirmwareInfo {
+  if (!config || typeof config !== 'object') {
+    return { version: '2.0.0', major: 'v2', detectedFrom: 'default' };
+  }
+
+  // 1. Explicit firmwareVersion string in deviceSettings
+  const fw = config.deviceSettings?.firmwareVersion;
+  if (typeof fw === 'string' && fw.trim().length > 0) {
+    const trimmed = fw.trim();
+    if (trimmed.startsWith('2.') || trimmed.startsWith('v2.')) {
+      return { version: trimmed, major: 'v2', detectedFrom: 'metadata' };
+    }
+    if (trimmed.startsWith('1.') || trimmed.startsWith('v1.')) {
+      return { version: trimmed, major: 'v1', detectedFrom: 'metadata' };
+    }
+    return { version: trimmed, major: trimmed.startsWith('2') ? 'v2' : 'v1', detectedFrom: 'metadata' };
+  }
+
+  // 2. Structural heuristics for v2 vs v1
+  const g = config.globalSettings;
+  const isV2 =
+    (Array.isArray(config.presetSettings) && !Array.isArray(config.bankSettings)) ||
+    g?.bankPcMidiOutputs !== undefined ||
+    g?.tapTempoQuant !== undefined ||
+    g?.zeroIndexBanks !== undefined ||
+    g?.midiOutPortMode === 'typeA' ||
+    g?.midiOutPortMode === 'typeB' ||
+    g?.switches?.some((s: any) => s?.mode === 'presetDown' || s?.mode === 'presetUp' || s?.mode === 'tapTempo');
+
+  if (isV2) {
+    return { version: '2.0.0', major: 'v2', detectedFrom: 'schema' };
+  }
+
+  return { version: '1.0.1', major: 'v1', detectedFrom: 'schema' };
 }
 
 /** Max display-text length for bank name and secondary text. */
@@ -220,7 +269,7 @@ const messageItemSchema = {
       required: ['statusByte', 'smartType', 'dataByte1', 'dataByte2'],
       properties: {
         statusByte: { type: 'integer' },
-        smartType: { type: 'string', enum: ['blockingDelay', 'sendCurrentPreset'] },
+        smartType: { type: 'string', enum: ['blockingDelay', 'sendCurrentPreset', 'setTempo', 'changeTempo'] },
         dataByte1: { type: 'integer', minimum: 0, maximum: 255 },
         dataByte2: { type: 'integer', minimum: 0, maximum: 255 },
       },
@@ -249,13 +298,66 @@ const portHandlesSchema = {
   },
 };
 
-/** JSON Schema mirroring the published device schema, for Ajv/Zod-style validation. */
+const bankItemSchema = {
+  type: 'object',
+  required: [
+    'bankId',
+    'bankName',
+    'secondaryText',
+    'colourOverride',
+    'colour',
+    'textColourOverride',
+    'textColour',
+    'bpm',
+    'switches',
+    'customMessages',
+    'presetMessages',
+    'midiValueDisplayOverride',
+    'midiValueDisplay',
+    'midiValueDisplayCC',
+  ],
+  additionalProperties: false,
+  properties: {
+    bankId: { type: 'integer' },
+    bankName: { type: 'string', maxLength: MAX_BANK_TEXT_LENGTH },
+    secondaryText: { type: 'string', maxLength: MAX_BANK_TEXT_LENGTH },
+    colourOverride: { type: 'boolean' },
+    colour: { type: 'integer' },
+    textColourOverride: { type: 'boolean' },
+    textColour: { type: 'integer' },
+    bpm: { type: 'number', minimum: 0 },
+    switches: {
+      type: 'array',
+      maxItems: SWITCH_COUNT,
+      items: {
+        type: 'object',
+        required: ['pressMessages', 'holdMessages'],
+        additionalProperties: false,
+        properties: {
+          pressMessages: messageGroupSchema,
+          holdMessages: messageGroupSchema,
+        },
+      },
+    },
+    customMessages: messageGroupSchema,
+    presetMessages: messageGroupSchema,
+    midiValueDisplayOverride: { type: 'boolean' },
+    midiValueDisplay: {
+      type: 'string',
+      enum: ['none', 'bar', 'barPercent', 'barValue', 'percentOnly', 'valueOnly'],
+    },
+    midiValueDisplayCC: { type: 'integer', minimum: 0, maximum: 127 },
+  },
+};
+
+/** JSON Schema mirroring the published device schema, supporting v1.0.x and v2.0.x. */
 export const scribbleJsonSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
-  $id: 'piratemidi:scribble:v1.0.1:scribble',
-  title: 'Pirate MIDI Scribble Device API (v1.0.1)',
+  $id: 'piratemidi:scribble:unified:scribble',
+  title: 'Pirate MIDI Scribble Device API (v1.0.x / v2.0.x)',
   type: 'object',
-  required: ['deviceSettings', 'globalSettings', 'bankSettings'],
+  required: ['deviceSettings', 'globalSettings'],
+  anyOf: [{ required: ['bankSettings'] }, { required: ['presetSettings'] }],
   properties: {
     deviceSettings: {
       type: 'object',
@@ -284,7 +386,6 @@ export const scribbleJsonSchema = {
         'midiOutPortMode',
         'clockMode',
         'clockDisplayType',
-        'pcBankOutputs',
         'usbdThruHandles',
         'bleThruHandles',
         'midi1ThruHandles',
@@ -316,7 +417,7 @@ export const scribbleJsonSchema = {
         displayBrightness: { type: 'integer', minimum: 1, maximum: 100 },
         midiChannel: { type: 'integer', minimum: 0, maximum: 15 },
         globalBpm: { type: 'number', minimum: 0 },
-        midiOutPortMode: { type: 'string', enum: ['midiOutA', 'midiOutB'] },
+        midiOutPortMode: { type: 'string', enum: ['midiOutA', 'midiOutB', 'typeA', 'typeB'] },
         clockMode: { type: 'string', enum: ['preset', 'external', 'global', 'none'] },
         clockDisplayType: { type: 'string', enum: ['bpm', 'ms', 'indicator'] },
         pcBankOutputs: {
@@ -329,6 +430,18 @@ export const scribbleJsonSchema = {
             midi1: { type: 'integer' },
           },
         },
+        bankPcMidiOutputs: {
+          type: 'object',
+          required: ['usbd', 'ble', 'midi1'],
+          additionalProperties: false,
+          properties: {
+            usbd: { type: 'integer' },
+            ble: { type: 'integer' },
+            midi1: { type: 'integer' },
+          },
+        },
+        tapTempoQuant: { type: 'string' },
+        zeroIndexBanks: { type: 'boolean' },
         usbdThruHandles: portHandlesSchema,
         bleThruHandles: portHandlesSchema,
         midi1ThruHandles: portHandlesSchema,
@@ -343,7 +456,16 @@ export const scribbleJsonSchema = {
             properties: {
               mode: {
                 type: 'string',
-                enum: ['pressPresetUp', 'pressPresetDown', 'holdPresetUp', 'holdPresetDown', 'midiOnly'],
+                enum: [
+                  'pressPresetUp',
+                  'pressPresetDown',
+                  'holdPresetUp',
+                  'holdPresetDown',
+                  'presetUp',
+                  'presetDown',
+                  'tapTempo',
+                  'midiOnly',
+                ],
               },
               pressMessages: messageGroupSchema,
               holdMessages: messageGroupSchema,
@@ -373,57 +495,12 @@ export const scribbleJsonSchema = {
     bankSettings: {
       type: 'array',
       maxItems: BANK_COUNT,
-      items: {
-        type: 'object',
-        required: [
-          'bankId',
-          'bankName',
-          'secondaryText',
-          'colourOverride',
-          'colour',
-          'textColourOverride',
-          'textColour',
-          'bpm',
-          'switches',
-          'customMessages',
-          'presetMessages',
-          'midiValueDisplayOverride',
-          'midiValueDisplay',
-          'midiValueDisplayCC',
-        ],
-        additionalProperties: false,
-        properties: {
-          bankId: { type: 'integer' },
-          bankName: { type: 'string', maxLength: MAX_BANK_TEXT_LENGTH },
-          secondaryText: { type: 'string', maxLength: MAX_BANK_TEXT_LENGTH },
-          colourOverride: { type: 'boolean' },
-          colour: { type: 'integer' },
-          textColourOverride: { type: 'boolean' },
-          textColour: { type: 'integer' },
-          bpm: { type: 'number', minimum: 0 },
-          switches: {
-            type: 'array',
-            maxItems: SWITCH_COUNT,
-            items: {
-              type: 'object',
-              required: ['pressMessages', 'holdMessages'],
-              additionalProperties: false,
-              properties: {
-                pressMessages: messageGroupSchema,
-                holdMessages: messageGroupSchema,
-              },
-            },
-          },
-          customMessages: messageGroupSchema,
-          presetMessages: messageGroupSchema,
-          midiValueDisplayOverride: { type: 'boolean' },
-          midiValueDisplay: {
-            type: 'string',
-            enum: ['none', 'bar', 'barPercent', 'barValue', 'percentOnly', 'valueOnly'],
-          },
-          midiValueDisplayCC: { type: 'integer', minimum: 0, maximum: 127 },
-        },
-      },
+      items: bankItemSchema,
+    },
+    presetSettings: {
+      type: 'array',
+      maxItems: BANK_COUNT,
+      items: bankItemSchema,
     },
   },
 };

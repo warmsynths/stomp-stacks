@@ -85,7 +85,9 @@ export function compileConfig(state: StompState) {
 /** Every message we emit fans out to all three ports. */
 const ALL_OUTPUTS: MessageOutputs = { usb: true, ble: true, midi1: true };
 
-export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig {
+export function compileHardwareScribbleConfig(state: StompState, targetVersion?: 'v1' | 'v2'): ScribbleConfig {
+  const fwMajor = targetVersion || state.scribbleFirmware?.major || 'v1';
+  const isV2 = fwMajor === 'v2';
   const bankSettings: ScribbleBankSetting[] = [];
   const keys = ['A', 'B', 'C', 'D'];
 
@@ -171,10 +173,75 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
     });
   }
 
-  return {
+  if (isV2) {
+    const result: ScribbleConfig = {
+      deviceSettings: {
+        deviceModel: 'Scribble',
+        firmwareVersion: state.scribbleFirmware?.major === 'v2' ? state.scribbleFirmware.version : '2.0.0',
+        hardwareVersion: 'hw1.x.0',
+        deviceName: 'Scribble',
+        uId: 158812475426520,
+        profileId: 0,
+      },
+      globalSettings: {
+        deviceName: 'Scribble',
+        currentBank: 0,
+        lightMode: 'dark',
+        mainColour: 15199215,
+        textColour: 0,
+        displayBrightness: 100,
+        midiChannel: 0,
+        globalBpm: 120,
+        midiOutPortMode: 'typeA',
+        bankPcMidiOutputs: { usbd: 0, ble: 0, midi1: 0 },
+        clockMode: 'external',
+        clockDisplayType: 'bpm',
+        tapTempoQuant: 'none',
+        usbdThruHandles: { usbd: false, ble: true, midi1: true },
+        bleThruHandles: { usbd: true, ble: false, midi1: true },
+        midi1ThruHandles: { usbd: true, ble: true, midi1: true },
+        midiClockOutHandles: { usbd: false, ble: false, midi1: false },
+        switches: [
+          { mode: 'presetDown', pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+          { mode: 'presetUp', pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+        ],
+        customMessages: { numMessages: 0, messages: [] },
+        presetUpCC: 1,
+        presetDownCC: 2,
+        goToPresetCC: 3,
+        globalCustomMessagesCC: 17,
+        presetCustomMessagesCC: 16,
+        midiValueDisplay: 'valueOnly',
+        midiValueDisplayCC: 7,
+        wirelessType: 'ble',
+        bleMode: 'server',
+        mainTextResize: false,
+        zeroIndexBanks: false,
+        kemperPlayerMode: false,
+        useStaticIp: false,
+        staticIp: '0.0.0.0',
+        gatewayIp: '0.0.0.0',
+      },
+      presetSettings: bankSettings,
+    };
+
+    // Non-enumerable alias so legacy accessors like config.bankSettings still work
+    // without polluting JSON.stringify() or Object.keys().
+    Object.defineProperty(result, 'bankSettings', {
+      get() {
+        return this.presetSettings;
+      },
+      enumerable: false,
+      configurable: true,
+    });
+
+    return result;
+  }
+
+  const result: ScribbleConfig = {
     deviceSettings: {
       deviceModel: 'Scribble',
-      firmwareVersion: '1.0.1',
+      firmwareVersion: state.scribbleFirmware?.major === 'v1' ? state.scribbleFirmware.version : '1.0.1',
       hardwareVersion: '1.x.0',
       deviceName: 'Scribble',
       uId: 158812475426520,
@@ -219,6 +286,16 @@ export function compileHardwareScribbleConfig(state: StompState): ScribbleConfig
     },
     bankSettings,
   };
+
+  Object.defineProperty(result, 'presetSettings', {
+    get() {
+      return this.bankSettings;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  return result;
 }
 
 export interface ParsedScribblePreset {

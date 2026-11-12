@@ -28,7 +28,7 @@ import type {
 import { midiService, hex } from '../services/midi-service.js';
 import { parseAllScribblePresets } from '../compiler/adapters/scribble.js';
 import { describeStep } from '../compiler/adapters/mc3.js';
-import type { ScribbleConfig } from '../types/scribble.js';
+import { type ScribbleConfig, detectScribbleFirmwareVersion } from '../types/scribble.js';
 
 export const MAX_STEPS = DEFAULT_MAX_STEPS;
 
@@ -113,6 +113,7 @@ function initialState(controllerId: string): StompState {
     firing: null,
     lit: null,
     jumpOpen: false,
+    scribbleFirmware: { version: '2.0.0', major: 'v2', detectedFrom: 'default' },
   };
 }
 
@@ -1456,6 +1457,11 @@ export class StompStore extends EventTarget {
       targetConfig = (await midiService.readLiveDeviceConfig(id)) ?? undefined;
     }
 
+    if (targetConfig && id === 'scribble') {
+      const fw = detectScribbleFirmwareVersion(targetConfig);
+      this.set({ scribbleFirmware: { ...fw, detectedFrom: scribbleConfig ? 'file' : 'device' } });
+    }
+
     const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
     const pal = PALETTE.map((p) => p[0]);
 
@@ -1607,6 +1613,9 @@ export class StompStore extends EventTarget {
     const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
 
     if (targetConfig) {
+      const fw = detectScribbleFirmwareVersion(targetConfig);
+      this.set({ scribbleFirmware: { ...fw, detectedFrom: 'device' } });
+
       const rawParsed = parseAllScribblePresets(targetConfig, st.channels, keys);
       const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
         id: `${p.bankIndex}:${p.key}:${i}`,
@@ -1633,7 +1642,31 @@ export class StompStore extends EventTarget {
     this.readFrom('scribble', targetConfig || undefined);
   }
 
+  setScribbleFirmware(versionOrMajor: 'v1' | 'v2' | string) {
+    const major: 'v1' | 'v2' = versionOrMajor.startsWith('1') || versionOrMajor === 'v1' ? 'v1' : 'v2';
+    const version = versionOrMajor === 'v1' ? '1.0.1' : versionOrMajor === 'v2' ? '2.0.0' : versionOrMajor;
+    this.set({
+      scribbleFirmware: {
+        version,
+        major,
+        detectedFrom: 'manual',
+      },
+    });
+    this.pushLog({
+      text: `scribble firmware set to ${major.toUpperCase()} (${version})`,
+      sub: 'export schema adjusted',
+      tone: 'ok',
+    });
+  }
+
   loadScribbleFile(config: ScribbleConfig) {
+    const fw = detectScribbleFirmwareVersion(config);
+    this.set({ scribbleFirmware: { ...fw, detectedFrom: fw.detectedFrom || 'file' } });
+    this.pushLog({
+      text: `loaded scribble config (${fw.version})`,
+      sub: `firmware ${fw.major.toUpperCase()} detected from ${fw.detectedFrom || 'file'}`,
+      tone: 'ok',
+    });
     this.readFrom('scribble', config);
   }
 

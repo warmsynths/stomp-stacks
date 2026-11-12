@@ -311,7 +311,8 @@ export class ReadModal extends LitElement {
     const read = st.readData;
     const busy = !!read.readingHardware;
     const deviceName = read.from === 'scribble' ? 'scribble relay' : read.from;
-    const readTitle = `presets on the ${deviceName}`;
+    const fwBadge = read.from === 'scribble' && st.scribbleFirmware ? ` (${st.scribbleFirmware.version})` : '';
+    const readTitle = `presets on the ${deviceName}${fwBadge}`;
     const readMeta = `128 slots, ${read.presets.length} carrying something. send any of them to any stack in bank ${String(st.bank + 1).padStart(2, '0')} — nothing changes until you apply.`;
 
     const scanned = read.scanned || 0;

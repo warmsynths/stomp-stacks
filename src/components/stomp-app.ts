@@ -143,6 +143,9 @@ export class StompApp extends LitElement {
             >
               <span style=${this.pipStyle(!!st.conn[st.controllerId])}></span>
               <span>${ctrl.isBrain ? 'controller · brain' : 'controller'}</span>
+              ${ctrl.isBrain && st.scribbleFirmware
+                ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
+                : null}
             </span>
             <span style="font-size:12.5px;font-weight:600">${ctrl.short}</span>
           </button>
@@ -164,6 +167,9 @@ export class StompApp extends LitElement {
                       )}
                     ></span>
                     <span>brain</span>
+                    ${st.brainId === 'scribble' && st.scribbleFirmware
+                      ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
+                      : null}
                   </span>
                   <span style="font-size:12.5px;font-weight:600"
                     >${brain.short}</span

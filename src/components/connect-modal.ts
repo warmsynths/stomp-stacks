@@ -420,6 +420,9 @@ export class ConnectModal extends LitElement {
                       <div class="dev-top">
                         <span class="dev-name">${r.name}</span>
                         <span class="dev-kind">${r.kind}</span>
+                        ${r.id === 'scribble' && st.scribbleFirmware
+                          ? html`<span style="font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:6px;background:var(--mustard);border:1px solid var(--ink);font-weight:600">${st.scribbleFirmware.version}</span>`
+                          : null}
                       </div>
                       <span class="dev-port" style="opacity:${on ? '0.6' : '0.35'}">${on ? r.port : 'not open'}</span>
                     </div>
