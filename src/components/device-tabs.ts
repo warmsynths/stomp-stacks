@@ -42,7 +42,11 @@ export class DeviceTabs extends LitElement {
         border: 2px solid var(--ink);
         transition:
           background 150ms ease,
-          box-shadow 150ms ease;
+          box-shadow 150ms ease,
+          opacity 150ms ease;
+      }
+      .chip-wrap:hover {
+        opacity: 1 !important;
       }
       .chip-btn {
         display: flex;
@@ -56,6 +60,43 @@ export class DeviceTabs extends LitElement {
       }
       .chip-btn:active {
         transform: scale(0.97);
+      }
+      .chip-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin-right: 7px;
+        margin-left: -2px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        color: var(--ink);
+        cursor: pointer;
+        opacity: 0.5;
+        transition:
+          opacity 120ms ease,
+          background 120ms ease,
+          transform 100ms ease;
+      }
+      .chip-wrap[active] .chip-remove {
+        opacity: 0.7;
+      }
+      .chip-wrap:not([active]) .chip-remove {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .chip-wrap:not([active]):hover .chip-remove {
+        opacity: 0.55;
+        pointer-events: auto;
+      }
+      .chip-remove:hover {
+        opacity: 1 !important;
+        background: rgba(22, 50, 61, 0.15);
+      }
+      .chip-remove:active {
+        transform: scale(0.9);
       }
       .dot {
         width: 13px;
@@ -507,6 +548,7 @@ export class DeviceTabs extends LitElement {
             if (!d) return null;
             const on = active === id;
             const peekOnThis = !on && st.peek?.device === id;
+            const canRemove = st.rig.length > 1;
             return html`
               <span
                 class="chip-wrap"
@@ -519,12 +561,40 @@ export class DeviceTabs extends LitElement {
                   class="chip-btn"
                   style=${peekOnThis
                     ? 'border-radius:18px;background:#f7c948;animation:ring 1s cubic-bezier(.23,1,.32,1) infinite'
-                    : ''}
+                    : canRemove
+                      ? 'padding-right: 4px;'
+                      : ''}
                   @click=${() => this.store.setBrowseDevice(id)}
                 >
                   <span class="dot" style="background:${d.accent}"></span>
                   <span>${d.name}</span>
                 </button>
+                ${canRemove
+                  ? html`
+                      <button
+                        class="chip-remove"
+                        title="Remove ${d.name} from rig"
+                        aria-label="Remove ${d.name} from rig"
+                        @click=${(e: Event) => {
+                          e.stopPropagation();
+                          this.store.setConfirmRemove(id);
+                        }}
+                      >
+                        <svg
+                          width="9"
+                          height="9"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        >
+                          <line x1="1" y1="1" x2="9" y2="9" />
+                          <line x1="9" y1="1" x2="1" y2="9" />
+                        </svg>
+                      </button>
+                    `
+                  : null}
               </span>
             `;
           })}

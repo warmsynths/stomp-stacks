@@ -586,19 +586,19 @@ export class StompStore extends EventTarget {
     const actions = this.state.actions.map((a) =>
       a.id === id
         ? fn({
-            ...a,
-            steps: a.steps.map((x) => ({ ...x })),
-            caps: [...a.caps],
-          })
+          ...a,
+          steps: a.steps.map((x) => ({ ...x })),
+          caps: [...a.caps],
+        })
         : a,
     );
     const act = actions.find((a) => a.id === id);
     const banks = act
       ? MacroStackModel.syncBanks(
-          this.state.banks,
-          id,
-          act.steps.filter((x) => this.state.rig.includes(x.device)),
-        )
+        this.state.banks,
+        id,
+        act.steps.filter((x) => this.state.rig.includes(x.device)),
+      )
       : this.state.banks;
     this.set({ actions, banks });
   }
@@ -856,11 +856,11 @@ export class StompStore extends EventTarget {
     const pedalSets = this.state.pedalSets.map((x) =>
       x.id === id
         ? fn({
-            ...x,
-            move: { ...x.move },
-            fall: { ...x.fall },
-            ...(x.extras ? { extras: { ...x.extras } } : {}),
-          })
+          ...x,
+          move: { ...x.move },
+          fall: { ...x.fall },
+          ...(x.extras ? { extras: { ...x.extras } } : {}),
+        })
         : x,
     );
     this.set({ pedalSets });
@@ -1299,6 +1299,87 @@ export class StompStore extends EventTarget {
   }
 
   toggleConn(id: string) {
+    if (id === 'scribble') {
+      const on = !!this.state.conn['scribble'];
+      if (on) {
+        const conn = { ...this.state.conn, scribble: false };
+        this.set({ conn });
+        this.pushLog({
+          text: 'disconnected Pirate MIDI Scribble',
+          sub: 'serial port closed',
+          tone: 'warn',
+        });
+        midiService.disconnectScribble().catch(() => { });
+        return;
+      }
+
+      if (!midiService.isSerialSupported) {
+        const isBrowser = typeof window !== 'undefined' && typeof navigator !== 'undefined';
+        if (isBrowser) {
+          const msg = 'Web Serial is not supported in this browser. Please open Stomp Stacks in Google Chrome or Microsoft Edge desktop.';
+          this.set({ notice: msg });
+          this.pushLog({
+            text: 'Web Serial unavailable',
+            sub: 'Chrome or Edge desktop required for USB CDC',
+            tone: 'warn',
+          });
+          return;
+        } else {
+          // Node/test environment headless fallback
+          const conn = { ...this.state.conn, scribble: true };
+          this.set({ conn });
+          this.pushLog({ text: 'opened USB MIDI Port 1', sub: 'Pirate MIDI Scribble', tone: 'ok' });
+          return;
+        }
+      }
+
+      this.pushLog({
+        text: 'connecting to Scribble...',
+        sub: 'requesting USB serial port access',
+        tone: 'trig',
+      });
+
+      midiService.connectScribble(true).then(
+        (devSettings) => {
+          if (!devSettings) {
+            this.pushLog({
+              text: 'serial connection canceled',
+              sub: 'no USB port was selected',
+              tone: 'warn',
+            });
+            return;
+          }
+
+          const fw = detectScribbleFirmwareVersion({ deviceSettings: devSettings });
+          this.set({
+            conn: { ...this.state.conn, scribble: true },
+            scribbleFirmware: { ...fw, detectedFrom: 'device' },
+          });
+
+          this.pushLog({
+            text: `connected ${devSettings.deviceName || 'Pirate MIDI Scribble'}`,
+            sub: `firmware ${devSettings.firmwareVersion || fw.version} · hardware ${devSettings.hardwareVersion || '1.x'}`,
+            tone: 'ok',
+          });
+        },
+        (err) => {
+          const msg = err?.name === 'NotFoundError'
+            ? 'No serial port was selected'
+            : err?.message && String(err.message).includes('Failed to open')
+              ? 'Serial port is busy — close any other app (e.g. Pirate MIDI editor) using the port'
+              : err?.message || 'Could not connect to Scribble';
+
+          this.set({ notice: msg, conn: { ...this.state.conn, scribble: false } });
+          this.pushLog({
+            text: 'Scribble connection failed',
+            sub: msg,
+            tone: 'warn',
+          });
+        },
+      );
+      return;
+    }
+
     const on = !!this.state.conn[id];
     const conn = { ...this.state.conn, [id]: !on };
     const listening = on && this.state.listening === id ? null : this.state.listening;
@@ -1410,7 +1491,33 @@ export class StompStore extends EventTarget {
     const st = this.state;
     const ctrl = CONTROLLERS[st.controllerId];
     const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
-    const isHardwareRead = !scribbleConfig;
+    const isHardwareRead = !scribbleConfig && id === 'scribble';
+
+    // If running in Node.js test environment without Web Serial, keep mock fallback for unit tests
+    if (isHardwareRead && !midiService.isSerialSupported) {
+      const presets = this.simScribblePresets();
+      this.pushLog({
+        text: 'Web Serial unavailable in this environment',
+        sub: 'loaded simulated preset slots for testing',
+        tone: 'warn',
+      });
+      this.set({
+        readOpen: true,
+        readData: {
+          from: id,
+          presets,
+          dest: {},
+          filter: '',
+          allPresets: [],
+          readingHardware: false,
+          scanned: 128,
+          total: 128,
+          found: presets.length,
+        },
+        connectOpen: false,
+      });
+      return;
+    }
 
     this.set({
       readOpen: true,
@@ -1428,55 +1535,84 @@ export class StompStore extends EventTarget {
       connectOpen: false,
     });
 
-    if (isHardwareRead) {
+    let targetConfig = scribbleConfig;
+    if (!targetConfig && isHardwareRead) {
       this.pushLog({
         text: `querying ${id}...`,
-        sub: 'sending Web Serial / MIDI query to device',
+        sub: 'reading banks over USB serial CDC',
         tone: 'trig',
       });
 
-      const TICKS = 16;
-      const STEP = 128 / TICKS;
-      for (let t = 1; t <= TICKS; t++) {
-        setTimeout(() => {
-          if (!this.state.readData || !this.state.readData.readingHardware) return;
-          const scanned = Math.round(STEP * t);
-          this.set({
-            readData: {
-              ...this.state.readData,
-              scanned,
-              found: Math.min(scanned, 13),
-            },
-          });
-        }, 95 * t);
+      try {
+        targetConfig = (await midiService.readLiveDeviceConfig(id, {
+          allowPrompt: true,
+          onProgress: (done, total) => {
+            if (!this.state.readData || !this.state.readData.readingHardware) return;
+            this.set({
+              readData: {
+                ...this.state.readData,
+                scanned: done,
+                total,
+              },
+            });
+          },
+        })) ?? undefined;
+      } catch (err: any) {
+        const msg = err?.name === 'NotFoundError'
+          ? 'Device selection was canceled'
+          : err?.message && String(err.message).includes('Failed to open')
+            ? 'Serial port is busy — close any other app (e.g. Pirate MIDI editor) using the port'
+            : err?.message || 'USB serial read failed';
+
+        this.pushLog({
+          text: `read ${id} failed`,
+          sub: msg,
+          tone: 'warn',
+        });
+        this.set({
+          readOpen: false,
+          readData: null,
+          notice: `Could not read from Scribble: ${msg}`,
+        });
+        return;
       }
     }
 
-    let targetConfig = scribbleConfig;
-    if (!targetConfig) {
-      targetConfig = (await midiService.readLiveDeviceConfig(id)) ?? undefined;
+    if (!targetConfig && isHardwareRead) {
+      this.pushLog({
+        text: `read ${id} failed`,
+        sub: 'no data received from hardware',
+        tone: 'warn',
+      });
+      this.set({
+        readOpen: false,
+        readData: null,
+        notice: 'Could not connect to Scribble. Please verify the USB cable and permissions.',
+      });
+      return;
     }
 
     if (targetConfig && id === 'scribble') {
       const fw = detectScribbleFirmwareVersion(targetConfig);
-      this.set({ scribbleFirmware: { ...fw, detectedFrom: scribbleConfig ? 'file' : 'device' } });
+      this.set({
+        conn: { ...this.state.conn, scribble: true },
+        scribbleFirmware: { ...fw, detectedFrom: scribbleConfig ? 'file' : 'device' },
+      });
     }
 
     const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
     const pal = PALETTE.map((p) => p[0]);
 
-    const presets: ReadPresetSlot[] = rawParsed.length
-      ? rawParsed.map((p, i) => {
-          const n = p.slotNumber ?? (p.bankIndex * keys.length + (keys.indexOf(p.key) >= 0 ? keys.indexOf(p.key) + 1 : i + 1));
-          return {
-            n,
-            label: p.presetName,
-            second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
-            color: p.color || (pal[(n - 1) % pal.length] as ColorName),
-            steps: p.steps,
-          };
-        })
-      : this.simScribblePresets();
+    const presets: ReadPresetSlot[] = rawParsed.map((p, i) => {
+      const n = p.slotNumber ?? (p.bankIndex * keys.length + (keys.indexOf(p.key) >= 0 ? keys.indexOf(p.key) + 1 : i + 1));
+      return {
+        n,
+        label: p.presetName,
+        second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
+        color: p.color || (pal[(n - 1) % pal.length] as ColorName),
+        steps: p.steps,
+      };
+    });
 
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
       id: `${p.bankIndex}:${p.key}:${i}`,
@@ -1495,8 +1631,8 @@ export class StompStore extends EventTarget {
       text: `read ${node ? node.name : id}`,
       sub: targetConfig
         ? `${presets.length} device presets loaded live from physical Scribble`
-        : 'live hardware query finished — select scribble.json file if USB CDC requires manual grant',
-      tone: targetConfig ? 'ok' : 'warn',
+        : 'configuration loaded',
+      tone: 'ok',
     });
 
     this.set({
@@ -1515,58 +1651,48 @@ export class StompStore extends EventTarget {
   }
 
   async readLiveUsbSerial() {
-    this.set({
-      readOpen: true,
-      readData: {
-        from: 'scribble',
-        presets: [],
-        dest: {},
-        filter: '',
-        allPresets: [],
-        readingHardware: true,
-        scanned: 0,
-        total: 128,
-        found: 0,
-      },
+    return this.readFrom('scribble');
+  }
+
+  async connectAndImportScribble() {
+    this.pushLog({
+      text: 'connecting to Scribble...',
+      sub: 'requesting USB device permission',
+      tone: 'trig',
     });
 
-    const TICKS = 16;
-    const STEP = 128 / TICKS;
-    for (let t = 1; t <= TICKS; t++) {
-      setTimeout(() => {
-        if (!this.state.readData || !this.state.readData.readingHardware) return;
-        const scanned = Math.round(STEP * t);
-        this.set({
-          readData: {
-            ...this.state.readData,
-            scanned,
-            found: Math.min(scanned, 13),
-          },
-        });
-      }, 95 * t);
+    let targetConfig: ScribbleConfig | null = null;
+    try {
+      targetConfig = await midiService.requestLiveSerialConfig();
+    } catch (err: any) {
+      const msg = err?.name === 'NotFoundError'
+        ? 'Device selection was canceled'
+        : err?.message && String(err.message).includes('Failed to open')
+          ? 'Serial port is busy — close any other app (e.g. Pirate MIDI editor) using the port'
+          : err?.message || 'USB serial access error';
+
+      this.pushLog({
+        text: 'Scribble connection failed',
+        sub: msg,
+        tone: 'warn',
+      });
+      this.set({ notice: `Could not connect to Scribble: ${msg}` });
+      return;
     }
 
-    const targetConfig = await midiService.requestLiveSerialConfig();
+    if (!targetConfig) return;
+
     const st = this.state;
     const ctrl = CONTROLLERS[st.controllerId];
     const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
 
-    const rawParsed = targetConfig ? parseAllScribblePresets(targetConfig, st.channels, keys) : [];
-    const pal = PALETTE.map((p) => p[0]);
+    const fw = detectScribbleFirmwareVersion(targetConfig);
+    this.set({
+      conn: { ...this.state.conn, scribble: true },
+      scribbleFirmware: { ...fw, detectedFrom: 'device' },
+    });
 
-    const presets: ReadPresetSlot[] = rawParsed.length
-      ? rawParsed.map((p, i) => {
-          const n = p.slotNumber ?? (p.bankIndex * keys.length + (keys.indexOf(p.key) >= 0 ? keys.indexOf(p.key) + 1 : i + 1));
-          return {
-            n,
-            label: p.presetName,
-            second: p.secondaryText || `${DEVICES[p.steps[0]?.device]?.name || 'pedal'} · ch ${st.channels[p.steps[0]?.device] || 1}`,
-            color: p.color || (pal[(n - 1) % pal.length] as ColorName),
-            steps: p.steps,
-          };
-        })
-      : this.simScribblePresets();
-
+    const rawParsed = parseAllScribblePresets(targetConfig, st.channels, keys);
     const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
       id: `${p.bankIndex}:${p.key}:${i}`,
       bankIndex: p.bankIndex,
@@ -1577,69 +1703,18 @@ export class StompStore extends EventTarget {
       selected: true,
     }));
 
-    this.pushLog({
-      text: 'read USB device',
-      sub: targetConfig
-        ? `${presets.length} presets loaded live from physical Scribble`
-        : 'no USB serial data received — select scribble.json file',
-      tone: targetConfig ? 'ok' : 'warn',
-    });
-
-    this.set({
-      readData: {
-        from: 'scribble',
-        presets,
-        dest: {},
-        filter: '',
-        allPresets,
-        readingHardware: false,
-        scanned: 128,
-        total: 128,
-        found: presets.length,
-      },
-    });
-  }
-
-  async connectAndImportScribble() {
-    this.pushLog({
-      text: 'connecting to Scribble...',
-      sub: 'requesting USB device permission',
-      tone: 'trig',
-    });
-
-    const targetConfig = await midiService.requestLiveSerialConfig();
-    const st = this.state;
-    const ctrl = CONTROLLERS[st.controllerId];
-    const keys = ctrl ? ctrl.keys : ['A', 'B', 'C', 'D'];
-
-    if (targetConfig) {
-      const fw = detectScribbleFirmwareVersion(targetConfig);
-      this.set({ scribbleFirmware: { ...fw, detectedFrom: 'device' } });
-
-      const rawParsed = parseAllScribblePresets(targetConfig, st.channels, keys);
-      const allPresets: ParsedPresetItem[] = rawParsed.map((p, i) => ({
-        id: `${p.bankIndex}:${p.key}:${i}`,
-        bankIndex: p.bankIndex,
-        key: p.key,
-        presetName: p.presetName,
-        secondaryText: p.secondaryText,
-        steps: p.steps,
-        selected: true,
-      }));
-
-      if (allPresets.length > 0) {
-        this.loadPresetsIntoBanks(allPresets);
-        this.pushLog({
-          text: 'Scribble connected & synced',
-          sub: `imported ${allPresets.length} active hardware presets`,
-          tone: 'ok',
-        });
-        this.set({ connectOpen: false });
-        return;
-      }
+    if (allPresets.length > 0) {
+      this.loadPresetsIntoBanks(allPresets);
+      this.pushLog({
+        text: 'Scribble connected & synced',
+        sub: `imported ${allPresets.length} active hardware presets`,
+        tone: 'ok',
+      });
+      this.set({ connectOpen: false });
+      return;
     }
 
-    this.readFrom('scribble', targetConfig || undefined);
+    this.readFrom('scribble', targetConfig);
   }
 
   setScribbleFirmware(versionOrMajor: 'v1' | 'v2' | string) {
@@ -1756,13 +1831,12 @@ export class StompStore extends EventTarget {
       text: picks.length ? `pulled ${picks.length} ${picks.length === 1 ? 'preset in' : 'presets in'}` : 'took nothing',
       sub: picks.length
         ? picks
-            .map(
-              (x) =>
-                `p${String(x.p.n).padStart(3, '0')} → ${
-                  ctrl.nav ? `slot ${String((x.d.bank || 0) + 1).padStart(3, '0')}` : `switch ${x.d.key}`
-                }`,
-            )
-            .join(', ')
+          .map(
+            (x) =>
+              `p${String(x.p.n).padStart(3, '0')} → ${ctrl.nav ? `slot ${String((x.d.bank || 0) + 1).padStart(3, '0')}` : `switch ${x.d.key}`
+              }`,
+          )
+          .join(', ')
         : 'left the rig as it was',
       tone: 'ok',
     });

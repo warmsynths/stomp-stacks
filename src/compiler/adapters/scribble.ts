@@ -532,6 +532,12 @@ export function parseAllScribblePresets(
     }
   }
 
+  // If this was an actual configuration object (from hardware or an imported file),
+  // return the actual parsed presets (even if empty) rather than generating fake sample presets.
+  if (config && (Array.isArray(config.bankSettings) || Array.isArray(config.presetSettings) || Array.isArray(config.macros))) {
+    return presets;
+  }
+
 
   const defaultSampleNames: Array<{ name: string; secondary: string; color: ColorName }> = [
     { name: 'CLOUD', secondary: 'Ambient Delay', color: 'red' },

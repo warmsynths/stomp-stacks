@@ -1,7 +1,7 @@
 import { CONTROLLERS } from '../data/controllers.js';
 import { DEVICES } from '../data/devices.js';
 import type { ConnectedNode, StompState } from '../state/types.js';
-import type { ScribbleConfig } from '../types/scribble.js';
+import type { ScribbleConfig, ScribbleDeviceSettings } from '../types/scribble.js';
 import {
   PirateMidiDeviceApi,
   WebSerialTransport,
@@ -23,6 +23,9 @@ export class WebMidiService {
   private midiAccess: MIDIAccess | null = null;
   private listeners: Set<() => void> = new Set();
   public isSupported: boolean = typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator;
+  public isSerialSupported: boolean = typeof navigator !== 'undefined' && 'serial' in (navigator as any);
+  public activePort: any = null;
+  public activePortName: string = '';
 
   async init(): Promise<boolean> {
     if (!this.isSupported) return false;
@@ -57,14 +60,19 @@ export class WebMidiService {
 
     // 1. Brain / Controller node
     const ctrl = CONTROLLERS[state.controllerId];
-    const targetName = state.brainId === 'scribble' ? 'Pirate MIDI Scribble' : ctrl ? ctrl.name : 'Controller';
+    const isScribble = state.brainId === 'scribble' || state.controllerId === 'scribble';
+    const targetName = isScribble ? 'Pirate MIDI Scribble' : ctrl ? ctrl.name : 'Controller';
     const portMatch = ports.find((p) => p.name.toLowerCase().includes(state.brainId) || p.name.toLowerCase().includes(state.controllerId));
 
+    const defaultPort = isScribble
+      ? (this.activePortName || (this.isSerialSupported ? 'USB Serial CDC (115200)' : 'Web Serial unavailable'))
+      : 'USB MIDI Port 1';
+
     nodes.push({
-      id: state.brainId === 'scribble' ? 'scribble' : state.controllerId,
+      id: isScribble ? 'scribble' : state.controllerId,
       name: targetName,
-      kind: 'USB-C MIDI',
-      port: portMatch ? portMatch.portName : 'USB MIDI Port 1',
+      kind: isScribble ? 'USB-C Serial · CDC' : 'USB-C MIDI',
+      port: portMatch ? portMatch.portName : defaultPort,
       canRead: true,
       canListen: false,
     });
@@ -97,29 +105,62 @@ export class WebMidiService {
     return list;
   }
 
+  /**
+   * Opens (or reuses) a Web Serial connection to the Scribble and handshakes
+   * via the CHCK command to retrieve device identity.
+   */
+  async connectScribble(promptUser: boolean = true): Promise<ScribbleDeviceSettings | null> {
+    if (!this.isSerialSupported) {
+      throw new Error('Web Serial is not supported in this browser. Please use Chrome or Edge on desktop.');
+    }
+    const api = await this.openDeviceApi(promptUser);
+    if (!api) return null;
+    try {
+      const devSettings = await api.check();
+      return devSettings;
+    } catch (err: any) {
+      console.warn('Scribble handshake failed:', err);
+      throw err;
+    } finally {
+      await api.close();
+    }
+  }
 
+  /**
+   * Closes the active Web Serial connection and releases the COM port.
+   */
+  async disconnectScribble(): Promise<void> {
+    if (this.activePort) {
+      try {
+        await this.activePort.close();
+      } catch (err) {
+        console.warn('Error closing serial port:', err);
+      }
+      this.activePort = null;
+      this.activePortName = '';
+    }
+  }
 
   /**
    * Opens (or reuses) a Web Serial connection to the Scribble and returns a
    * protocol client for it.
-   *
-   * `requestPort` may only be called from a user gesture, so `allowPrompt` is
-   * off for background reads and on for explicit "connect" clicks.
    */
   private async openDeviceApi(allowPrompt: boolean): Promise<PirateMidiDeviceApi | null> {
-    if (typeof navigator === 'undefined' || !('serial' in (navigator as any))) {
+    if (!this.isSerialSupported) {
       console.warn('Web Serial is unavailable — the Device API needs Chrome or Edge on desktop.');
       return null;
     }
 
     const serial = (navigator as any).serial;
 
-    let port: any = null;
-    const paired = await serial.getPorts();
-    if (paired.length > 0) {
-      port = paired[0];
-    } else if (allowPrompt) {
-      port = await serial.requestPort();
+    let port: any = this.activePort;
+    if (!port) {
+      const paired = await serial.getPorts();
+      if (paired.length > 0) {
+        port = paired[0];
+      } else if (allowPrompt) {
+        port = await serial.requestPort();
+      }
     }
 
     if (!port) return null;
@@ -135,13 +176,18 @@ export class WebMidiService {
       }
     }
 
+    this.activePort = port;
+    const info = port.getInfo ? port.getInfo() : {};
+    this.activePortName = info.usbVendorId
+      ? `USB Serial (0x${info.usbVendorId.toString(16).padStart(4, '0')})`
+      : 'USB Serial CDC (115200 baud)';
+
     return new PirateMidiDeviceApi(new WebSerialTransport(port));
   }
 
   /**
    * Reads the full device configuration over USB CDC using the Pirate MIDI
-   * Device API. Must be called from a user gesture the first time, because
-   * pairing the serial port requires one.
+   * Device API. Prompts for pairing if not already paired.
    */
   async requestLiveSerialConfig(options: ReadConfigOptions = {}): Promise<ScribbleConfig | null> {
     let api: PirateMidiDeviceApi | null = null;
@@ -151,29 +197,30 @@ export class WebMidiService {
       return await api.readFullConfig(options);
     } catch (err) {
       console.warn('Scribble read failed:', err);
-      return null;
+      throw err;
     } finally {
       await api?.close();
     }
   }
 
   /**
-   * Reads the full device configuration from an already-paired serial port,
-   * without prompting. Returns null when nothing is paired yet.
-   *
-   * Only the Scribble speaks the Device API; other node ids have no transport.
+   * Reads the full device configuration. `allowPrompt` defaults to true so
+   * user gestures (such as clicking 'read') can pair the device if needed.
    */
-  async readLiveDeviceConfig(id: string, options: ReadConfigOptions = {}): Promise<ScribbleConfig | null> {
+  async readLiveDeviceConfig(
+    id: string,
+    options: ReadConfigOptions & { allowPrompt?: boolean } = {},
+  ): Promise<ScribbleConfig | null> {
     if (id !== 'scribble') return null;
 
     let api: PirateMidiDeviceApi | null = null;
     try {
-      api = await this.openDeviceApi(false);
+      api = await this.openDeviceApi(options.allowPrompt ?? true);
       if (!api) return null;
       return await api.readFullConfig(options);
     } catch (err) {
       console.warn('Scribble read failed:', err);
-      return null;
+      throw err;
     } finally {
       await api?.close();
     }

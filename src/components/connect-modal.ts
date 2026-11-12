@@ -407,13 +407,28 @@ export class ConnectModal extends LitElement {
             <div class="meta">${connectMeta}</div>
           </div>
           <div class="body">
+            ${st.notice
+        ? html`
+                  <div
+                    style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-radius:14px;background:#fde8e8;border:2px solid #e53e3e;font-size:12px;color:#9b1c1c;line-height:1.4"
+                  >
+                    <span>${st.notice}</span>
+                    <button
+                      style="border:none;background:none;cursor:pointer;font-weight:bold;color:#9b1c1c;font-size:14px;flex:none"
+                      @click=${() => this.store.clearNotice()}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                `
+        : null}
             <div class="rows-box">
               ${nodes.map((r) => {
-                const on = !!st.conn[r.id];
-                const listening = st.listening === r.id;
-                const dotBg = on ? (r.id === 'scribble' ? '#8fd0e6' : DEVICES[r.id]?.accent || '#8fd0e6') : 'transparent';
+          const on = !!st.conn[r.id];
+          const listening = st.listening === r.id;
+          const dotBg = on ? (r.id === 'scribble' ? '#8fd0e6' : DEVICES[r.id]?.accent || '#8fd0e6') : 'transparent';
 
-                return html`
+          return html`
                   <div class="dev-row">
                     <span class="dev-dot" style="background:${dotBg}"></span>
                     <div class="dev-info">
@@ -421,20 +436,20 @@ export class ConnectModal extends LitElement {
                         <span class="dev-name">${r.name}</span>
                         <span class="dev-kind">${r.kind}</span>
                         ${r.id === 'scribble' && st.scribbleFirmware
-                          ? html`<span style="font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:6px;background:var(--mustard);border:1px solid var(--ink);font-weight:600">${st.scribbleFirmware.version}</span>`
-                          : null}
+              ? html`<span style="font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:6px;background:var(--mustard);border:1px solid var(--ink);font-weight:600">${st.scribbleFirmware.version}</span>`
+              : null}
                       </div>
                       <span class="dev-port" style="opacity:${on ? '0.6' : '0.35'}">${on ? r.port : 'not open'}</span>
                     </div>
                     ${r.canRead
-                      ? html`
+              ? html`
                           <button class="btn-action" @click=${() => this.store.readFrom(r.id)}>
                             read
                           </button>
                         `
-                      : null}
+              : null}
                     ${r.canListen
-                      ? html`
+              ? html`
                           <button
                             class="btn-listen"
                             ?listening=${listening}
@@ -443,7 +458,7 @@ export class ConnectModal extends LitElement {
                             ${listening ? 'listening…' : 'listen'}
                           </button>
                         `
-                      : null}
+              : null}
                     <button
                       class="btn-toggle"
                       ?on=${on}
@@ -453,48 +468,48 @@ export class ConnectModal extends LitElement {
                     </button>
                   </div>
                 `;
-              })}
+        })}
             </div>
 
             ${st.heard
-              ? html`
+        ? html`
                   <div class="heard-card" ?ok=${!st.heard.drift}>
                     <div class="heard-head">
                       <span class="heard-dot"></span>
                       <span class="heard-title">
                         ${st.heard.drift
-                          ? "that isn't where we expected it"
-                          : `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} answers where we thought`}
+            ? "that isn't where we expected it"
+            : `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} answers where we thought`}
                       </span>
                     </div>
                     <div class="heard-body">
                       ${st.heard.drift
-                        ? `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} sent cc ${st.heard.cc}, but our map puts that control on cc ${st.heard.expect}. the whole map looks shifted by ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift} — probably a firmware revision.`
-                        : `cc ${st.heard.cc}, exactly where the map says. the rest of the pedal should line up too.`}
+            ? `${DEVICES[st.heard.pedal]?.name || st.heard.pedal} sent cc ${st.heard.cc}, but our map puts that control on cc ${st.heard.expect}. the whole map looks shifted by ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift} — probably a firmware revision.`
+            : `cc ${st.heard.cc}, exactly where the map says. the rest of the pedal should line up too.`}
                     </div>
                     <div class="heard-btns">
                       ${st.heard.drift
-                        ? html`
+            ? html`
                             <button class="btn-accept" @click=${() => this.store.acceptDrift()}>
                               shift the map by ${st.heard.drift > 0 ? '+' : ''}${st.heard.drift}
                             </button>
                           `
-                        : null}
+            : null}
                       <button class="btn-dismiss" @click=${() => this.store.dismissHeard()}>
                         ${st.heard.drift ? 'leave it' : 'good'}
                       </button>
                     </div>
                   </div>
                 `
-              : null}
+        : null}
 
             <div class="monitor-row" ?active=${st.monitorOn}>
               <div style="flex:1;min-width:0">
                 <span style="display:block;font-size:13.5px;font-weight:600">watch the wire</span>
                 <span style="display:block;font-size:11.5px;opacity:.6;margin-top:2px;text-wrap:pretty">
                   ${connCount
-                    ? 'every message shows up as it leaves, and anything that goes unanswered gets called out.'
-                    : "connect something first — there's nothing to watch yet."}
+        ? 'every message shows up as it leaves, and anything that goes unanswered gets called out.'
+        : "connect something first — there's nothing to watch yet."}
                 </span>
               </div>
               <div

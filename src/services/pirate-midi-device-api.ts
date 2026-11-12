@@ -188,7 +188,7 @@ export class PirateMidiDeviceApi {
 
     throw new DeviceApiError(
       `${context}: no response within ${this.timeoutMs}ms` +
-        (this.buffer.pending ? ` (partial data: ${this.buffer.pending.slice(0, 60)})` : ''),
+      (this.buffer.pending ? ` (partial data: ${this.buffer.pending.slice(0, 60)})` : ''),
     );
   }
 
@@ -339,6 +339,7 @@ export class WebSerialTransport implements SerialTransport {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private decoder = new TextDecoder();
   private port: any;
+  private pendingRead: Promise<string | null> | null = null;
 
   constructor(port: any) {
     this.port = port;
@@ -357,19 +358,31 @@ export class WebSerialTransport implements SerialTransport {
     if (!this.reader) {
       this.reader = this.port.readable.getReader();
     }
-    const { value, done } = await this.reader!.read();
-    if (done) return null;
-    return this.decoder.decode(value, { stream: true });
+    if (this.pendingRead) {
+      return this.pendingRead;
+    }
+    this.pendingRead = (async () => {
+      try {
+        const { value, done } = await this.reader!.read();
+        if (done) return null;
+        return this.decoder.decode(value, { stream: true });
+      } finally {
+        this.pendingRead = null;
+      }
+    })();
+    return this.pendingRead;
   }
 
   async close(): Promise<void> {
     if (this.reader) {
       try {
+        await this.reader.cancel();
         this.reader.releaseLock();
       } catch {
         // Reader already released or stream torn down.
       }
       this.reader = null;
+      this.pendingRead = null;
     }
   }
 }
