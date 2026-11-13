@@ -91,20 +91,18 @@ export class MacroPanel extends LitElement {
       ).toFixed(1)}%;width:${(((wi.hi - wi.lo) / 127) * 100).toFixed(
         1
       )}%;background:${col};border-radius:5px`,
-      dot: `position:absolute;top:50%;left:0;width:14px;height:14px;border-radius:50%;background:#f7c948;border:2px solid #16323d;transform:translate(-50%,-50%);animation:${
-        wi.bounce
-          ? `wig ${dur}s ease-in-out infinite alternate`
-          : `glide ${dur}s cubic-bezier(.23,1,.32,1) infinite`
-      }`,
+      dot: `position:absolute;top:50%;left:0;width:14px;height:14px;border-radius:50%;background:#f7c948;border:2px solid #16323d;transform:translate(-50%,-50%);animation:${wi.bounce
+        ? `wig ${dur}s ease-in-out infinite alternate`
+        : `glide ${dur}s cubic-bezier(.23,1,.32,1) infinite`
+        }`,
     };
   }
 
   private capChipStyle(on: boolean, col: string) {
-    return `display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:11.5px;font-weight:600;border:2px solid #16323d;transition:background 140ms ease,box-shadow 140ms ease;${
-      on
-        ? `background:${col};box-shadow:2px 2px 0 #16323d`
-        : 'background:#fffbf0;opacity:.55'
-    }`;
+    return `display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:11.5px;font-weight:600;border:2px solid #16323d;transition:background 140ms ease,box-shadow 140ms ease;${on
+      ? `background:${col};box-shadow:2px 2px 0 #16323d`
+      : 'background:#fffbf0;opacity:.55'
+      }`;
   }
 
   private formatStepLabel(s: MacroStep): string {
@@ -173,23 +171,20 @@ export class MacroPanel extends LitElement {
     const selectedKey = ctrl.nav
       ? SIDE_LABELS[st.selectedKey] || st.selectedKey
       : st.selectedKey;
-    const pressTitle = `${
-      ctrl.nav ? (st.selectedKey === 'L' ? 'left' : 'right') : st.selectedKey
-    } · ${st.action === 'press' ? 'tap' : st.action}`;
-    const pressSub = `${
-      ctrl.nav
-        ? `p${String(st.bank + 1).padStart(3, '0')}`
-        : `bank ${st.bank + 1}`
-    } · ${list.length} of ${lim} messages`;
+    const pressTitle = `${ctrl.nav ? (st.selectedKey === 'L' ? 'left' : 'right') : st.selectedKey
+      } · ${st.action === 'press' ? 'tap' : st.action}`;
+    const pressSub = `${ctrl.nav
+      ? `p${String(st.bank + 1).padStart(3, '0')}`
+      : `bank ${st.bank + 1}`
+      } · ${list.length} of ${lim} messages`;
     const stackNamePlaceholder =
       idNow.auto ||
       (ctrl.nav ? 'name this preset' : `name switch ${st.selectedKey}`);
 
     const curActLabel =
       ACTIONS.find((a) => a.id === st.action)?.label || st.action;
-    const hStackBody = `everything listed below goes out, in order, when you ${curActLabel} ${
-      ctrl.nav ? 'on this preset' : 'this switch'
-    }. ${this.store.limitWho()} sends up to ${lim} messages per press. actions show as a coloured card — 'unlink' keeps the messages but stops them following the action.`;
+    const hStackBody = `everything listed below goes out, in order, when you ${curActLabel} ${ctrl.nav ? 'on this preset' : 'this switch'
+      }. ${this.store.limitWho()} sends up to ${lim} messages per press. actions show as a coloured card — 'unlink' keeps the messages but stops them following the action.`;
 
     const flags: Array<{ text: string }> = [];
     if (canName) {
@@ -216,67 +211,65 @@ export class MacroPanel extends LitElement {
       (p) => shared.length > 0 && !shared.includes(p[0])
     ).map((p) => p[0]);
     const colorPopNote = shared.length
-      ? `every device in the rig can light these. ${
-          dimmed.length
-            ? `${dimmed.join(', ')} ${
-                dimmed.length === 1 ? 'is' : 'are'
-              } out of range.`
-            : ''
-        }`
+      ? `every device in the rig can light these. ${dimmed.length
+        ? `${dimmed.join(', ')} ${dimmed.length === 1 ? 'is' : 'are'
+        } out of range.`
+        : ''
+      }`
       : 'no device in this rig has a light — colour rides along on the label sheet only.';
 
     return html`
       <div
         style="flex:none;padding:${this.desktop
-          ? '15px 18px 13px'
-          : '12px 16px 13px'};background:#fdf3d4;border-bottom:2.5px solid #16323d"
+        ? '15px 18px 13px'
+        : '12px 16px 13px'};background:#fdf3d4;border-bottom:2.5px solid #16323d"
       >
         <div
           style="position:relative;display:flex;align-items:center;gap:8px;margin-bottom:${panelTabs ||
-          flags.length
-            ? '9px'
-            : '0'}"
+        flags.length
+        ? '9px'
+        : '0'}"
         >
           ${selectedKeyIsNav
-            ? html`
+        ? html`
                 <select
                   .value=${String(st.bank + 1)}
                   style="flex:none;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;padding:5px 9px;border-radius:10px;background:#16323d;color:#f7c948;border:2px solid #16323d"
                   @change=${(e: Event) =>
-                    this.store.selectBank(
-                      parseInt((e.target as HTMLSelectElement).value, 10) - 1
-                    )}
+            this.store.selectBank(
+              parseInt((e.target as HTMLSelectElement).value, 10) - 1
+            )}
                 >
                   ${st.banks.map((_, i) => {
-                    const lensMatch =
-                      st.lens &&
-                      ctrl.keys.some((k) =>
-                        this.store.slotCaps(st.banks[i][k]).includes(st.lens!)
-                      );
-                    const lensName = st.lens
-                      ? this.store.capOf(st.lens)?.name
-                      : '';
-                    return html`
+              const lensMatch =
+                st.lens &&
+                ctrl.keys.some((k) =>
+                  this.store.slotCaps(st.banks[i][k]).includes(st.lens!)
+                );
+              const lensName = st.lens
+                ? this.store.capOf(st.lens)?.name
+                : '';
+              return html`
                       <option value=${i + 1} ?selected=${i === st.bank}>
                         p${String(i + 1).padStart(3, '0')}${lensMatch
-                          ? `  ● ${lensName}`
-                          : ''}
+                  ? `  ● ${lensName}`
+                  : ''}
                       </option>
                     `;
-                  })}
+            })}
                 </select>
               `
-            : null}
+        : null}
           ${selectedKeyIsTag
-            ? html`
+        ? html`
                 <span
                   style="flex:none;font-family:'DM Mono',monospace;font-size:11px;padding:3px 8px;border-radius:10px;background:#16323d;color:#fdf3d4"
                   >${selectedKey}</span
                 >
               `
-            : null}
+        : null}
           ${showStripCard
-            ? html`
+        ? html`
                 <div
                   style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:6px 11px;border-radius:13px;border:2.5px solid #16323d;background:${stripBg};transition:background 200ms ease"
                 >
@@ -286,9 +279,9 @@ export class MacroPanel extends LitElement {
                     maxlength="24"
                     style="width:100%;padding:0;border:0;background:transparent;font-family:inherit;font-size:15px;font-weight:600;letter-spacing:-.02em;line-height:1.25;color:${stripInk};outline:none"
                     @input=${(e: InputEvent) =>
-                      this.store.setIdent({
-                        name: (e.target as HTMLInputElement).value,
-                      })}
+            this.store.setIdent({
+              name: (e.target as HTMLInputElement).value,
+            })}
                   />
                   <input
                     .value=${idNow.secondary}
@@ -296,24 +289,24 @@ export class MacroPanel extends LitElement {
                     maxlength="24"
                     style="width:100%;padding:0;border:0;background:transparent;font-family:'DM Mono',monospace;font-size:11px;line-height:1.35;color:${stripInk};opacity:.72;outline:none"
                     @input=${(e: InputEvent) =>
-                      this.store.setIdent({
-                        secondary: (e.target as HTMLInputElement).value,
-                      })}
+            this.store.setIdent({
+              secondary: (e.target as HTMLInputElement).value,
+            })}
                   />
                 </div>
                 <button
                   title=${idNow.color
-                    ? `strip colour · ${idNow.color}`
-                    : 'give this stack a colour'}
+            ? `strip colour · ${idNow.color}`
+            : 'give this stack a colour'}
                   style="width:26px;height:26px;flex:none;border-radius:9px;border:2.5px solid #16323d;background:${idNow.color
-                    ? HEX[idNow.color]
-                    : 'repeating-linear-gradient(135deg,#fffbf0 0 4px,#e9e0cc 4px 8px)'};transition:box-shadow 150ms cubic-bezier(.23,1,.32,1)"
+            ? HEX[idNow.color]
+            : 'repeating-linear-gradient(135deg,#fffbf0 0 4px,#e9e0cc 4px 8px)'};transition:box-shadow 150ms cubic-bezier(.23,1,.32,1)"
                   @click=${() => this.store.toggleColorPicker()}
                 ></button>
               `
-            : null}
+        : null}
           ${pressHead
-            ? html`
+        ? html`
                 <div
                   style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px"
                 >
@@ -327,35 +320,35 @@ export class MacroPanel extends LitElement {
                   >
                 </div>
                 ${renderHintPopover(
-                  this.store,
-                  'stack',
-                  'right',
-                  "what's in this press",
-                  hStackBody
-                )}
+          this.store,
+          'stack',
+          'right',
+          "what's in this press",
+          hStackBody
+        )}
               `
-            : null}
+        : null}
           ${cantName
-            ? html`<div
+        ? html`<div
                 style="flex:1;min-width:0;font-size:16px;font-weight:600;letter-spacing:-.02em"
               >
                 macro
               </div>`
-            : null}
+        : null}
           ${selectedKeyIsTag
-            ? html`
+        ? html`
                 <span
                   style="flex:none;font-family:'DM Mono',monospace;font-size:11px;padding:3px 9px;border-radius:10px;border:2px solid #16323d;background:${list.length >=
-                  lim
-                    ? '#ffd9cc'
-                    : '#fffbf0'}"
+            lim
+            ? '#ffd9cc'
+            : '#fffbf0'}"
                 >
                   ${list.length} / ${lim}
                 </span>
               `
-            : null}
+        : null}
           ${this.phone
-            ? html`
+        ? html`
                 <button
                   style="width:26px;height:26px;flex:none;border-radius:50%;border:2px solid #16323d;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center"
                   @click=${() => this.store.toggleSheet()}
@@ -363,10 +356,10 @@ export class MacroPanel extends LitElement {
                   ${open ? '⌄' : '⌃'}
                 </button>
               `
-            : null}
+        : null}
 
           ${st.colorPickerOpen
-            ? html`
+        ? html`
                 <div
                   style="position:absolute;left:0;top:calc(100% + 8px);z-index:30;width:262px;max-width:100%;padding:14px;border-radius:20px;background:#fffbf0;border:2.5px solid #16323d;box-shadow:5px 5px 0 #16323d;animation:sheetIn 170ms cubic-bezier(.23,1,.32,1)"
                 >
@@ -375,8 +368,8 @@ export class MacroPanel extends LitElement {
                   >
                     <span style="flex:1;font-size:12.5px;font-weight:600"
                       >${ctrl.nav
-                        ? `preset ${String(st.bank + 1).padStart(3, '0')}`
-                        : `switch ${st.selectedKey}`}
+            ? `preset ${String(st.bank + 1).padStart(3, '0')}`
+            : `switch ${st.selectedKey}`}
                       lights up…</span
                     >
                     <button
@@ -390,28 +383,28 @@ export class MacroPanel extends LitElement {
                     style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px"
                   >
                     ${PALETTE.map((p) => {
-                      const allowed = shared.length
-                        ? shared.includes(p[0])
-                        : true;
-                      const on = idNow.color === p[0];
-                      return html`
+              const allowed = shared.length
+                ? shared.includes(p[0])
+                : true;
+              const on = idNow.color === p[0];
+              return html`
                         <button
                           title=${allowed
-                            ? p[0]
-                            : `${p[0]} — not in this rig's palette`}
+                  ? p[0]
+                  : `${p[0]} — not in this rig's palette`}
                           style="height:30px;border-radius:11px;border:2.5px solid #16323d;background:${p[1]};transition:box-shadow 150ms cubic-bezier(.23,1,.32,1),transform 120ms cubic-bezier(.23,1,.32,1);${on
-                            ? 'box-shadow:0 0 0 3px #16323d inset,3px 3px 0 #16323d;'
-                            : ''}${allowed
-                            ? ''
-                            : 'opacity:.22;pointer-events:none;'}"
+                  ? 'box-shadow:0 0 0 3px #16323d inset,3px 3px 0 #16323d;'
+                  : ''}${allowed
+                    ? ''
+                    : 'opacity:.22;pointer-events:none;'}"
                           @click=${() => {
-                            if (!allowed) return;
-                            this.store.setIdent({ color: on ? null : p[0] });
-                            this.store.closeColorPicker();
-                          }}
+                  if (!allowed) return;
+                  this.store.setIdent({ color: on ? null : p[0] });
+                  this.store.closeColorPicker();
+                }}
                         ></button>
                       `;
-                    })}
+            })}
                   </div>
                   <div
                     style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:11px;padding-top:11px;border-top:2px solid rgba(22,50,61,.15)"
@@ -420,15 +413,15 @@ export class MacroPanel extends LitElement {
                       >text</span
                     >
                     ${TEXTS.map((t) => {
-                      const on = idNow.textColor === t[0];
-                      return html`
+              const on = idNow.textColor === t[0];
+              return html`
                         <button
                           title="text in ${t[0]}${idNow.autoText
-                            ? ' — picked automatically until you choose'
-                            : ''}"
+                  ? ' — picked automatically until you choose'
+                  : ''}"
                           style="display:flex;align-items:center;gap:5px;flex:none;padding:4px 9px 4px 5px;border-radius:11px;border:2px solid #16323d;background:#fffbf0;font-size:11px;font-weight:600;color:#16323d;transition:box-shadow 150ms cubic-bezier(.23,1,.32,1),opacity 150ms ease;${on
-                            ? 'box-shadow:2px 2px 0 #16323d'
-                            : 'opacity:.55'}"
+                  ? 'box-shadow:2px 2px 0 #16323d'
+                  : 'opacity:.55'}"
                           @click=${() => this.store.setIdent({ textColor: t[0] })}
                         >
                           <span
@@ -437,7 +430,7 @@ export class MacroPanel extends LitElement {
                           <span>${t[0]}</span>
                         </button>
                       `;
-                    })}
+            })}
                   </div>
                   <div
                     style="margin-top:10px;font-size:11px;line-height:1.45;opacity:.6;text-wrap:pretty"
@@ -446,16 +439,16 @@ export class MacroPanel extends LitElement {
                   </div>
                 </div>
               `
-            : null}
+        : null}
         </div>
 
         ${flags.length > 0
-          ? html`
+        ? html`
               <div
                 style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"
               >
                 ${flags.map(
-                  (f) => html`
+          (f) => html`
                     <button
                       title="see how each device renders this"
                       style="display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:10px;border:1.5px solid #16323d;background:#fffbf0;font-size:11px"
@@ -467,48 +460,48 @@ export class MacroPanel extends LitElement {
                       <span>${f.text}</span>
                     </button>
                   `
-                )}
+        )}
               </div>
             `
-          : null}
+        : null}
 
         ${panelTabs
-          ? html`
+        ? html`
               <div style="display:flex;gap:6px">
                 ${acts.map((a) => {
-                  const on = st.action === a.id;
-                  const count = bank?.[st.selectedKey]?.[a.id]?.length || 0;
-                  return html`
+          const on = st.action === a.id;
+          const count = bank?.[st.selectedKey]?.[a.id]?.length || 0;
+          return html`
                     <button
                       style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 9px;border-radius:13px;font-size:12.5px;font-weight:600;border:2px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;${on
-                        ? 'background:#f7c948;box-shadow:2px 2px 0 #16323d'
-                        : 'background:#fffbf0;opacity:.65'}"
+              ? 'background:#f7c948;box-shadow:2px 2px 0 #16323d'
+              : 'background:#fffbf0;opacity:.65'}"
                       @click=${() => this.store.selectAction(a.id)}
                     >
                       <span>${a.label}</span>
                       <span
                         style="font-family:'DM Mono',monospace;font-size:10px;padding:1px 6px;border-radius:8px;background:${on
-                          ? '#16323d'
-                          : 'rgba(22,50,61,.12)'};color:${on
-                          ? '#f7c948'
-                          : '#16323d'}"
+              ? '#16323d'
+              : 'rgba(22,50,61,.12)'};color:${on
+                ? '#f7c948'
+                : '#16323d'}"
                         >${count}</span
                       >
                     </button>
                   `;
-                })}
+        })}
                 <span style="display:flex;align-items:center">
                   ${renderHintPopover(
-                    this.store,
-                    'stack',
-                    'right',
-                    "what's in this press",
-                    hStackBody
-                  )}
+          this.store,
+          'stack',
+          'right',
+          "what's in this press",
+          hStackBody
+        )}
                 </span>
               </div>
             `
-          : null}
+        : null}
       </div>
     `;
   }
@@ -543,24 +536,24 @@ export class MacroPanel extends LitElement {
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${sets.map((ps) => {
-            const on = activePc?.set === ps.id;
-            return html`
+      const on = activePc?.set === ps.id;
+      return html`
               <button
                 style="padding:8px 14px;border-radius:14px;font-size:13px;border:2px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;${on
-                  ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
-                  : 'background:#fffbf0'}"
+          ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
+          : 'background:#fffbf0'}"
                 @click=${() => this.store.setPedalSetupStep(ps.id, popDevice.id)}
               >
                 ${ps.name} · slot ${ps.slot}
               </button>
             `;
-          })}
+    })}
           <button
             style="padding:8px 14px;border-radius:14px;font-size:13px;border:2px dashed #16323d;background:#fffbf0"
             @click=${() => {
-              this.store.closePopover();
-              this.store.openSetups(null, popDevice.id as SetupDeviceId);
-            }}
+        this.store.closePopover();
+        this.store.openSetups(null, popDevice.id as SetupDeviceId);
+      }}
           >
             manage set-ups…
           </button>
@@ -616,21 +609,21 @@ export class MacroPanel extends LitElement {
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${options.map((opt) => {
-            const on = activeEntry?.value === opt.value;
-            return html`
+      const on = activeEntry?.value === opt.value;
+      return html`
               <button
                 style="padding:8px 14px;border-radius:14px;font-size:13px;border:2px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;${on
-                  ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
-                  : 'background:#fffbf0'}"
+          ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
+          : 'background:#fffbf0'}"
                 @click=${() => this.store.setKnobValue(popControl.id, opt.value)}
               >
                 ${opt.label}
               </button>
             `;
-          })}
+    })}
         </div>
         ${popControl.type === 'knob'
-          ? html`
+        ? html`
               <div
                 style="display:flex;align-items:center;gap:10px;margin-top:12px"
               >
@@ -642,16 +635,16 @@ export class MacroPanel extends LitElement {
                   .value=${String(popVal)}
                   style="flex:1;min-width:0;width:100%;accent-color:#16323d;height:22px;margin:0;cursor:pointer"
                   @input=${(e: Event) => {
-                    this.dragState = {
-                      key: dk,
-                      v: Number((e.target as HTMLInputElement).value),
-                    };
-                  }}
+            this.dragState = {
+              key: dk,
+              v: Number((e.target as HTMLInputElement).value),
+            };
+          }}
                   @change=${(e: Event) => {
-                    const v = Number((e.target as HTMLInputElement).value);
-                    this.dragState = null;
-                    this.store.setKnobNumericValue(popControl.id, v);
-                  }}
+            const v = Number((e.target as HTMLInputElement).value);
+            this.dragState = null;
+            this.store.setKnobNumericValue(popControl.id, v);
+          }}
                 />
                 <span
                   style="flex:none;width:104px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap"
@@ -659,7 +652,7 @@ export class MacroPanel extends LitElement {
                 >
               </div>
             `
-          : null}
+        : null}
       </div>
     `;
   }
@@ -669,9 +662,8 @@ export class MacroPanel extends LitElement {
     const usage = this.store.actionUsage();
     const useCount = usage[ea.id] || 0;
     const edUsed = useCount
-      ? `on ${useCount} ${
-          useCount === 1 ? 'press' : 'presses'
-        } — edits land on all of them`
+      ? `on ${useCount} ${useCount === 1 ? 'press' : 'presses'
+      } — edits land on all of them`
       : 'not on any press yet';
     const eaWi = this.store.wiggleInfo(ea.steps);
     const firstCapCol = this.store.capOf(ea.caps[0])?.colour || '#9fe0c0';
@@ -711,38 +703,38 @@ export class MacroPanel extends LitElement {
           maxlength="28"
           style="width:100%;padding:0;border:0;background:transparent;font-family:inherit;font-size:19px;font-weight:600;letter-spacing:-.02em;color:#16323d;outline:none"
           @input=${(e: InputEvent) =>
-            this.store.updateAction(ea.id, (a) => ({
-              ...a,
-              name: (e.target as HTMLInputElement).value,
-            }))}
+        this.store.updateAction(ea.id, (a) => ({
+          ...a,
+          name: (e.target as HTMLInputElement).value,
+        }))}
         />
         <input
           .value=${ea.what}
           placeholder="in plain words — what does it do to the sound?"
           style="width:100%;margin-top:3px;padding:0;border:0;background:transparent;font-family:inherit;font-size:12.5px;color:#16323d;opacity:.75;outline:none"
           @input=${(e: InputEvent) =>
-            this.store.updateAction(ea.id, (a) => ({
-              ...a,
-              what: (e.target as HTMLInputElement).value,
-            }))}
+        this.store.updateAction(ea.id, (a) => ({
+          ...a,
+          what: (e.target as HTMLInputElement).value,
+        }))}
         />
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:11px">
           ${CAPS.map((c) => {
-            const on = ea.caps.includes(c.id);
-            return html`
+          const on = ea.caps.includes(c.id);
+          return html`
               <button
                 style=${this.capChipStyle(on, c.colour)}
                 @click=${() =>
-                  this.store.updateAction(ea.id, (a) => {
-                    const has = a.caps.includes(c.id);
-                    const nextCaps =
-                      has && a.caps.length > 1
-                        ? a.caps.filter((x) => x !== c.id)
-                        : has
-                          ? a.caps
-                          : [...a.caps, c.id];
-                    return { ...a, caps: nextCaps };
-                  })}
+              this.store.updateAction(ea.id, (a) => {
+                const has = a.caps.includes(c.id);
+                const nextCaps =
+                  has && a.caps.length > 1
+                    ? a.caps.filter((x) => x !== c.id)
+                    : has
+                      ? a.caps
+                      : [...a.caps, c.id];
+                return { ...a, caps: nextCaps };
+              })}
               >
                 <span
                   style="width:11px;height:11px;flex:none;border-radius:4px;border:2px solid #16323d;background:${c.colour}"
@@ -750,7 +742,7 @@ export class MacroPanel extends LitElement {
                 <span>${c.name}</span>
               </button>
             `;
-          })}
+        })}
         </div>
       </div>
 
@@ -758,7 +750,7 @@ export class MacroPanel extends LitElement {
         style="flex:1;min-height:0;overflow:auto;padding:13px;display:flex;flex-direction:column;gap:9px;background:#fffbf0"
       >
         ${eaWi && eaWv
-          ? html`
+        ? html`
               <div
                 style="padding:12px 13px;border-radius:16px;border:2.5px solid #16323d;background:#f7f1e3;display:flex;flex-direction:column;gap:8px"
               >
@@ -767,18 +759,18 @@ export class MacroPanel extends LitElement {
                     >moves using the “${eaWi.set.name}” set-up</span
                   >
                   ${renderHintPopover(
-                    this.store,
-                    'wig',
-                    'right',
-                    'the moving dot',
-                    "the bar is the knob's full travel. the coloured part is where it'll move, and the dot shows the motion — back and forth for a wiggle, one way for a glide. the knob's value in this action sets one end; the set-up's sweep sets the other. mix sets the speed."
-                  )}
+          this.store,
+          'wig',
+          'right',
+          'the moving dot',
+          "the bar is the knob's full travel. the coloured part is where it'll move, and the dot shows the motion — back and forth for a wiggle, one way for a glide. the knob's value in this action sets one end; the set-up's sweep sets the other. mix sets the speed."
+        )}
                   <span style="flex:1"></span>
                   <button
                     class="hover-mustard"
                     style="padding:4px 10px;border-radius:11px;border:2px solid #16323d;background:#fffbf0;font-size:11.5px;font-weight:600"
                     @click=${() =>
-                      this.store.openSetups(eaWi.set.id, eaWi.set.device)}
+            this.store.openSetups(eaWi.set.id, eaWi.set.device)}
                   >
                     see the dips
                   </button>
@@ -793,7 +785,7 @@ export class MacroPanel extends LitElement {
                 </div>
               </div>
             `
-          : null}
+        : null}
 
         <div style="display:flex;align-items:center">
           <span
@@ -815,12 +807,10 @@ export class MacroPanel extends LitElement {
           const setObj = s.control === 'pc' ? this.store.findSet(s.set) : null;
           const stepTitle =
             s.control === 'pc'
-              ? `${dev ? dev.name : s.device} · load the “${
-                  setObj ? setObj.name : '?'
-                }” set-up`
-              : `${dev ? dev.name : s.device} · ${c ? c.label : s.control}${
-                  c?.type === 'foot' ? ' · press' : ''
-                }`;
+              ? `${dev ? dev.name : s.device} · load the “${setObj ? setObj.name : '?'
+              }” set-up`
+              : `${dev ? dev.name : s.device} · ${c ? c.label : s.control}${c?.type === 'foot' ? ' · press' : ''
+              }`;
 
           let vals: Array<{ label: string; on: boolean; onClick: () => void }> =
             [];
@@ -852,22 +842,22 @@ export class MacroPanel extends LitElement {
             <div
               style="padding:10px 12px;border-radius:15px;cursor:pointer;border:2.5px solid #16323d;background:${s.control ===
               'pc'
-                ? '#fdf3d4'
-                : '#fffbf0'};transition:box-shadow 160ms ease;${focused
+              ? '#fdf3d4'
+              : '#fffbf0'};transition:box-shadow 160ms ease;${focused
                 ? 'box-shadow:0 0 0 4px #f7c948'
                 : ''}"
               @click=${() => {
-                this.focusKey = fKey;
-                if (st.rig.includes(s.device)) {
-                  this.store.setBrowseDevice(s.device);
-                }
-              }}
+              this.focusKey = fKey;
+              if (st.rig.includes(s.device)) {
+                this.store.setBrowseDevice(s.device);
+              }
+            }}
             >
               <div style="display:flex;align-items:center;gap:9px">
                 <span
                   style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;border:2px solid #16323d;background:${focused
-                    ? '#f7c948'
-                    : '#fffbf0'}"
+              ? '#f7c948'
+              : '#fffbf0'}"
                   >${i + 1}</span
                 >
                 <span style="flex:1;min-width:0">
@@ -875,86 +865,86 @@ export class MacroPanel extends LitElement {
                     >${stepTitle}</span
                   >
                   ${role
-                    ? html`<span
+              ? html`<span
                         style="display:block;font-size:11.5px;line-height:1.4;opacity:.65;margin-top:2px;text-wrap:pretty"
                         >${role}</span
                       >`
-                    : null}
+              : null}
                 </span>
                 <button
                   class="del-btn"
                   style="width:24px;height:24px;flex:none;border-radius:9px;border:2px solid #16323d;font-size:12px;line-height:1"
                   @click=${(e: Event) => {
-                    e.stopPropagation();
-                    this.store.removeStep(i);
-                  }}
+              e.stopPropagation();
+              this.store.removeStep(i);
+            }}
                 >
                   ×
                 </button>
               </div>
               ${vals.length > 0
-                ? html`
+              ? html`
                     <div
                       style="display:flex;flex-wrap:wrap;gap:5px;margin-top:9px"
                     >
                       ${vals.map(
-                        (v) => html`
+                (v) => html`
                           <button
                             style="padding:5px 10px;border-radius:11px;font-size:11.5px;border:2px solid #16323d;transition:background 140ms ease;${v.on
-                              ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
-                              : 'background:#fffbf0;opacity:.7'}"
+                    ? 'background:#8fd0e6;font-weight:600;box-shadow:2px 2px 0 #16323d'
+                    : 'background:#fffbf0;opacity:.7'}"
                             @click=${(e: Event) => {
-                              e.stopPropagation();
-                              v.onClick();
-                            }}
+                    e.stopPropagation();
+                    v.onClick();
+                  }}
                           >
                             ${v.label}
                           </button>
                         `
-                      )}
+              )}
                     </div>
                   `
-                : null}
+              : null}
             </div>
           `;
         })}
 
         ${list.length === 0
-          ? html`
+        ? html`
               <div
                 style="padding:20px 16px;border-radius:16px;border:2.5px dashed rgba(22,50,61,.3);font-size:12.5px;line-height:1.5;opacity:.7;text-align:center;text-wrap:pretty"
               >
                 tap any control on the pedal to add it to this action.
               </div>
             `
-          : null}
+        : null}
 
         ${edCanSet && setupPedalId && setupPedal
-          ? html`
+        ? html`
               <button
                 class="hover-opa"
                 style="align-self:flex-start;padding:6px 12px;border-radius:13px;border:2px dashed #16323d;font-size:12px;font-weight:600;opacity:.7"
                 @click=${() => {
-                  const sets = this.store.setsForDevice(setupPedalId);
-                  if (!sets.length) return;
-                  this.store.updateAction(ea.id, (a) => ({
-                    ...a,
-                    steps: [
-                      {
-                        device: setupPedalId,
-                        control: 'pc',
-                        set: sets[0].id,
-                        value: null,
-                      },
-                      ...a.steps,
-                    ],
-                  }));
-                }}
+            const sets = this.store.setsForDevice(setupPedalId);
+            if (!sets.length) return;
+            this.store.updateAction(ea.id, (a) => ({
+              ...a,
+              steps: [
+                {
+                  device: setupPedalId,
+                  control: 'pc',
+                  set: sets[0].id,
+                  value: null,
+                },
+                ...a.steps,
+              ],
+            }));
+          }}
               >
                 + make a ${setupPedal.name} knob move on its own
               </button>
             `
-          : null}
+        : null}
       </div>
 
       <div
@@ -972,9 +962,9 @@ export class MacroPanel extends LitElement {
           class="hover-paper"
           style="padding:8px 12px;border-radius:16px;border:2px solid #16323d;font-size:12.5px;font-weight:600"
           @click=${() => {
-            this.store.setMode('assign', null);
-            this.store.insertAction(ea.id);
-          }}
+        this.store.setMode('assign', null);
+        this.store.insertAction(ea.id);
+      }}
         >
           + ${this.store.slotName()}
         </button>
@@ -992,14 +982,11 @@ export class MacroPanel extends LitElement {
     const st = this.store.state;
     const usage = this.store.actionUsage();
     const navBtnStyle = (enabled: boolean) =>
-      `width:${this.phone ? 30 : 24}px;height:${
-        this.phone ? 30 : 24
-      }px;border-radius:9px;border:2px solid #16323d;font-size:12px;line-height:1;transition:background 140ms ease;${
-        enabled ? '' : 'opacity:.25;pointer-events:none'
+      `width:${this.phone ? 30 : 24}px;height:${this.phone ? 30 : 24
+      }px;border-radius:9px;border:2px solid #16323d;font-size:12px;line-height:1;transition:background 140ms ease;${enabled ? '' : 'opacity:.25;pointer-events:none'
       }`;
-    const delStyle = `width:${this.phone ? 30 : 24}px;height:${
-      this.phone ? 30 : 24
-    }px;border-radius:9px;border:2px solid #16323d;font-size:12px;line-height:1;transition:background 140ms ease,color 140ms ease`;
+    const delStyle = `width:${this.phone ? 30 : 24}px;height:${this.phone ? 30 : 24
+      }px;border-radius:9px;border:2px solid #16323d;font-size:12px;line-height:1;transition:background 140ms ease,color 140ms ease`;
 
     return html`
       ${st.notice
@@ -1022,7 +1009,7 @@ export class MacroPanel extends LitElement {
         style="flex:1;min-height:0;overflow:auto;padding:13px;display:flex;flex-direction:column;gap:9px;background:#fffbf0"
       >
         ${list.length === 0
-          ? html`
+        ? html`
               <div
                 style="text-align:center;padding:28px 20px;border-radius:20px;border:2.5px dashed rgba(22,50,61,.3)"
               >
@@ -1049,7 +1036,7 @@ export class MacroPanel extends LitElement {
                 </div>
               </div>
             `
-          : null}
+        : null}
 
         ${list.map((s, i) => {
           const d = describeStep(s, st.channels, st.pedalSets, st.offsets);
@@ -1096,60 +1083,55 @@ export class MacroPanel extends LitElement {
 
           const cl = this.store.clash(list, i);
           const label = this.formatStepLabel(s);
-          const meta = `${s.from ? `was “${s.from}”, changed · ` : ''}${
-            d
-              ? s.control === 'pc'
-                ? `${d.deviceName} · ch${d.channel} · pc ${d.value}`
-                : `${d.deviceName} · ch${d.channel} · cc${d.cc} · ${d.value}`
-              : s.device
-          }`;
+          const meta = `${s.from ? `was “${s.from}”, changed · ` : ''}${d
+            ? s.control === 'pc'
+              ? `${d.deviceName} · ch${d.channel} · pc ${d.value}`
+              : `${d.deviceName} · ch${d.channel} · cc${d.cc} · ${d.value}`
+            : s.device
+            }`;
 
-          const headStyle = `flex:none;display:flex;flex-direction:column;gap:9px;padding:10px 12px;border-radius:16px;border:2.5px solid #16323d;background:${col};box-shadow:3px 3px 0 #16323d;margin-top:${
-            i ? 5 : 0
-          }px;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`;
+          const headStyle = `flex:none;display:flex;flex-direction:column;gap:9px;padding:10px 12px;border-radius:16px;border:2.5px solid #16323d;background:${col};box-shadow:3px 3px 0 #16323d;margin-top:${i ? 5 : 0
+            }px;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`;
 
           const rowStyle = a
-            ? `flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 12px;margin-left:16px;border-radius:14px;border:2px solid #16323d;cursor:pointer;transition:background 120ms ease;background:${
-                pinned ? '#f7c948' : '#fffbf0'
-              };animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`
-            : `flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;border:2.5px solid #16323d;cursor:pointer;transition:background 120ms ease;background:${
-                pinned ? '#f7c948' : '#fffbf0'
-              };box-shadow:3px 3px 0 #16323d;margin-top:${
-                i && list[i - 1].act ? 5 : 0
-              }px;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`;
+            ? `flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 12px;margin-left:16px;border-radius:14px;border:2px solid #16323d;cursor:pointer;transition:background 120ms ease;background:${pinned ? '#f7c948' : '#fffbf0'
+            };animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`
+            : `flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;border:2.5px solid #16323d;cursor:pointer;transition:background 120ms ease;background:${pinned ? '#f7c948' : '#fffbf0'
+            };box-shadow:3px 3px 0 #16323d;margin-top:${i && list[i - 1].act ? 5 : 0
+            }px;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)`;
 
           return html`
             <div style="display:contents">
               ${head && a
-                ? html`
+              ? html`
                     <div
                       style=${headStyle}
                       @pointerenter=${() => {
-                        if (this.pinnedRowIndex === null && groupSteps[0]) {
-                          this.store.setPeek({
-                            device: groupSteps[0].device,
-                            control: groupSteps[0].control,
-                            value: groupSteps[0].value,
-                          });
-                        }
-                      }}
+                  if (this.pinnedRowIndex === null && groupSteps[0]) {
+                    this.store.setPeek({
+                      device: groupSteps[0].device,
+                      control: groupSteps[0].control,
+                      value: groupSteps[0].value,
+                    });
+                  }
+                }}
                       @pointerleave=${() => {
-                        if (this.pinnedRowIndex === null) {
-                          this.store.setPeek(null);
-                        }
-                      }}
+                  if (this.pinnedRowIndex === null) {
+                    this.store.setPeek(null);
+                  }
+                }}
                     >
                       <div style="display:flex;align-items:center;gap:8px">
                         <span style="display:flex;gap:3px;flex:none">
                           ${a.caps.map((cId) => {
-                            const cap = this.store.capOf(cId);
-                            return cap
-                              ? html`<span
+                  const cap = this.store.capOf(cId);
+                  return cap
+                    ? html`<span
                                   title=${cap.name}
                                   style="width:12px;height:12px;border-radius:4px;border:2px solid #16323d;background:${cap.colour}"
                                 ></span>`
-                              : null;
-                          })}
+                    : null;
+                })}
                         </span>
                         <span
                           style="flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
@@ -1161,7 +1143,7 @@ export class MacroPanel extends LitElement {
                         >
                       </div>
                       ${wi && wv
-                        ? html`
+                  ? html`
                             <div
                               style="display:flex;flex-direction:column;gap:6px"
                             >
@@ -1176,7 +1158,7 @@ export class MacroPanel extends LitElement {
                               >
                             </div>
                           `
-                        : null}
+                  : null}
                       <div style="display:flex;gap:6px">
                         <button
                           style="padding:4px 10px;border-radius:11px;border:2px solid #16323d;background:#fffbf0;font-size:11.5px;font-weight:600"
@@ -1189,7 +1171,7 @@ export class MacroPanel extends LitElement {
                           title="keep these messages here but stop following the action"
                           style="padding:4px 10px;border-radius:11px;border:2px solid #16323d;background:transparent;font-size:11.5px;font-weight:600;opacity:.7"
                           @click=${() =>
-                            s.inst && this.store.detachGroup(s.inst)}
+                  s.inst && this.store.detachGroup(s.inst)}
                         >
                           unlink
                         </button>
@@ -1199,49 +1181,49 @@ export class MacroPanel extends LitElement {
                           title="take the whole action off"
                           style="padding:4px 10px;border-radius:11px;font-size:11.5px;font-weight:600;opacity:.6"
                           @click=${() =>
-                            s.inst && this.store.removeGroup(s.inst)}
+                  s.inst && this.store.removeGroup(s.inst)}
                         >
                           remove
                         </button>
                       </div>
                     </div>
                   `
-                : null}
+              : null}
 
               <div
                 style=${rowStyle}
                 @pointerenter=${() => {
-                  if (this.pinnedRowIndex === null) {
-                    this.store.setPeek({
-                      device: s.device,
-                      control: s.control,
-                      value: s.value,
-                    });
-                  }
-                }}
+              if (this.pinnedRowIndex === null) {
+                this.store.setPeek({
+                  device: s.device,
+                  control: s.control,
+                  value: s.value,
+                });
+              }
+            }}
                 @pointerleave=${() => {
-                  if (this.pinnedRowIndex === null) {
-                    this.store.setPeek(null);
-                  }
-                }}
+              if (this.pinnedRowIndex === null) {
+                this.store.setPeek(null);
+              }
+            }}
                 @click=${(e: Event) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('button,input')) return;
-                  if (this.pinnedRowIndex === i) {
-                    this.pinnedRowIndex = null;
-                    this.store.setPeek(null);
-                  } else {
-                    this.pinnedRowIndex = i;
-                    this.store.setPeek({
-                      device: s.device,
-                      control: s.control,
-                      value: s.value,
-                    });
-                    if (st.rig.includes(s.device)) {
-                      this.store.setBrowseDevice(s.device);
-                    }
-                  }
-                }}
+              const target = e.target as HTMLElement;
+              if (target.closest('button,input')) return;
+              if (this.pinnedRowIndex === i) {
+                this.pinnedRowIndex = null;
+                this.store.setPeek(null);
+              } else {
+                this.pinnedRowIndex = i;
+                this.store.setPeek({
+                  device: s.device,
+                  control: s.control,
+                  value: s.value,
+                });
+                if (st.rig.includes(s.device)) {
+                  this.store.setBrowseDevice(s.device);
+                }
+              }
+            }}
               >
                 <span
                   style="width:22px;height:22px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;background:#16323d;color:#fffbf0"
@@ -1249,15 +1231,15 @@ export class MacroPanel extends LitElement {
                 >
                 <span
                   style="width:13px;height:13px;flex:none;border-radius:5px;background:${d
-                    ? d.accent
-                    : '#ccc'};border:2px solid #16323d"
+              ? d.accent
+              : '#ccc'};border:2px solid #16323d"
                 ></span>
                 <span style="flex:1;min-width:0">
                   <span
                     style="display:block;font-size:13.5px;font-weight:600;line-height:1.25;text-wrap:pretty;overflow-wrap:anywhere${cl &&
-                    cl.kind === 'over'
-                      ? ';opacity:.45;text-decoration:line-through;text-decoration-thickness:1.5px'
-                      : ''}"
+              cl.kind === 'over'
+              ? ';opacity:.45;text-decoration:line-through;text-decoration-thickness:1.5px'
+              : ''}"
                     >${label}</span
                   >
                   <span
@@ -1269,18 +1251,18 @@ export class MacroPanel extends LitElement {
                   <button
                     style=${navBtnStyle(i > 0)}
                     @click=${(e: Event) => {
-                      e.stopPropagation();
-                      this.store.moveStep(i, -1);
-                    }}
+              e.stopPropagation();
+              this.store.moveStep(i, -1);
+            }}
                   >
                     ↑
                   </button>
                   <button
                     style=${navBtnStyle(i < list.length - 1)}
                     @click=${(e: Event) => {
-                      e.stopPropagation();
-                      this.store.moveStep(i, 1);
-                    }}
+              e.stopPropagation();
+              this.store.moveStep(i, 1);
+            }}
                   >
                     ↓
                   </button>
@@ -1288,22 +1270,22 @@ export class MacroPanel extends LitElement {
                     class="del-btn"
                     style=${delStyle}
                     @click=${(e: Event) => {
-                      e.stopPropagation();
-                      if (this.pinnedRowIndex === i) this.pinnedRowIndex = null;
-                      this.store.removeStep(i);
-                    }}
+              e.stopPropagation();
+              if (this.pinnedRowIndex === i) this.pinnedRowIndex = null;
+              this.store.removeStep(i);
+            }}
                   >
                     ×
                   </button>
                 </span>
 
                 ${editOn
-                  ? html`
+              ? html`
                       <span
                         style="flex:1 0 100%;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin-top:-2px;padding:6px 8px;border-radius:9px;background:#fffbf0;border:2px solid #16323d"
                       >
                         ${isKnob
-                          ? html`
+                  ? html`
                               <input
                                 type="range"
                                 min="0"
@@ -1312,101 +1294,101 @@ export class MacroPanel extends LitElement {
                                 .value=${String(editVal)}
                                 style="flex:1;min-width:120px;width:100%;accent-color:#16323d;height:22px;margin:0;cursor:pointer"
                                 @input=${(e: Event) => {
-                                  this.dragState = {
-                                    key: dk,
-                                    v: Number(
-                                      (e.target as HTMLInputElement).value
-                                    ),
-                                  };
-                                }}
+                      this.dragState = {
+                        key: dk,
+                        v: Number(
+                          (e.target as HTMLInputElement).value
+                        ),
+                      };
+                    }}
                                 @change=${(e: Event) => {
-                                  const v = Number(
-                                    (e.target as HTMLInputElement).value
-                                  );
-                                  this.dragState = null;
-                                  this.store.setValueAt(i, v);
-                                }}
+                      const v = Number(
+                        (e.target as HTMLInputElement).value
+                      );
+                      this.dragState = null;
+                      this.store.setValueAt(i, v);
+                    }}
                               />
                               <span
                                 style="flex:none;width:104px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap"
                                 >${editWord}</span
                               >
                             `
-                          : null}
+                  : null}
                         ${opts
-                          ? opts.map((opt) => {
-                              const on = s.value === opt.value;
-                              return html`
+                  ? opts.map((opt) => {
+                    const on = s.value === opt.value;
+                    return html`
                                 <button
                                   style="padding:3px 10px;border-radius:9px;font-size:11.5px;font-weight:600;border:2px solid #16323d;background:${on
-                                    ? '#8fd0e6'
-                                    : '#fffbf0'}"
+                        ? '#8fd0e6'
+                        : '#fffbf0'}"
                                   @click=${() =>
-                                    this.store.setValueAt(i, opt.value)}
+                        this.store.setValueAt(i, opt.value)}
                                 >
                                   ${opt.label}
                                 </button>
                               `;
-                            })
-                          : null}
+                  })
+                  : null}
                         ${pcSets
-                          ? pcSets.map((ps) => {
-                              const on = s.set === ps.id;
-                              return html`
+                  ? pcSets.map((ps) => {
+                    const on = s.set === ps.id;
+                    return html`
                                 <button
                                   style="padding:3px 10px;border-radius:9px;font-size:11.5px;font-weight:600;border:2px solid #16323d;background:${on
-                                    ? '#8fd0e6'
-                                    : '#fffbf0'}"
+                        ? '#8fd0e6'
+                        : '#fffbf0'}"
                                   @click=${() =>
-                                    this.store.setPedalSetupAt(i, ps.id)}
+                        this.store.setPedalSetupAt(i, ps.id)}
                                 >
                                   ${ps.name} · ${ps.slot}
                                 </button>
                               `;
-                            })
-                          : null}
+                  })
+                  : null}
                       </span>
                     `
-                  : null}
+              : null}
 
                 ${cl
-                  ? html`
+              ? html`
                       <span
                         style="flex:1 0 100%;display:flex;align-items:center;gap:8px;margin-top:-2px;padding:5px 6px 5px 9px;border-radius:9px;font-size:11.5px;line-height:1.3;font-weight:500;color:#16323d;background:${cl.kind ===
-                        'wig'
-                          ? '#e8f4fa'
-                          : 'rgba(22,50,61,.08)'}"
+                  'wig'
+                  ? '#e8f4fa'
+                  : 'rgba(22,50,61,.08)'}"
                       >
                         <span style="flex:1;min-width:0;text-wrap:pretty"
                           >${cl.text}</span
                         >
                         ${cl.kind === 'over'
-                          ? html`
+                  ? html`
                               <button
                                 style="flex:none;padding:3px 9px;border-radius:8px;border:2px solid #16323d;background:#fffbf0;font-size:11px;font-weight:600"
                                 @click=${(e: Event) => {
-                                  e.stopPropagation();
-                                  if (cl.merge != null) {
-                                    this.store.mergeSetups(i, cl.merge);
-                                  } else {
-                                    this.store.removeStep(i);
-                                  }
-                                }}
+                      e.stopPropagation();
+                      if (cl.merge != null) {
+                        this.store.mergeSetups(i, cl.merge);
+                      } else {
+                        this.store.removeStep(i);
+                      }
+                    }}
                               >
                                 ${cl.merge != null ? 'merge' : 'remove'}
                               </button>
                             `
-                          : null}
+                  : null}
                       </span>
                     `
-                  : null}
+              : null}
               </div>
             </div>
           `;
         })}
 
         ${list.length >= lim
-          ? html`
+        ? html`
               <div
                 style="padding:9px 13px;border-radius:14px;background:#ffe6dd;border:2px solid #16323d;font-size:12.5px"
               >
@@ -1414,7 +1396,7 @@ export class MacroPanel extends LitElement {
                 ${this.store.limitWho()}). remove a step to make room.
               </div>
             `
-          : null}
+        : null}
       </div>
     `;
   }

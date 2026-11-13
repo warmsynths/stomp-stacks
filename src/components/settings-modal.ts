@@ -5,6 +5,8 @@ import { PALETTE, HEX, TEXTHEX, isDark } from '../data/naming.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { FaceMode } from '../state/types.js';
+import { HardwareRegistry } from '../data/registry.js';
+import { BG_STYLES } from './pedal-bg.js';
 
 const FACE_TABS: Array<{ id: FaceMode; label: string }> = [
   { id: 'photo', label: 'photo' },
@@ -221,6 +223,7 @@ export class SettingsModal extends LitElement {
     const dimmed = PALETTE.map((p) => p[0]).filter((n) => shared.length > 0 && !shared.includes(n));
     const canName = this.store.displayTargets().length > 0 || shared.length > 0;
     const namingTargets = this.store.namingTargets();
+    const bgDevices = st.rig.filter((id) => Boolean(BG_STYLES[id]));
 
     return html`
       <div class="scrim" @click=${(e: Event) => e.target === e.currentTarget && this.store.closeSettings()}>
@@ -232,7 +235,7 @@ export class SettingsModal extends LitElement {
               <div class="group-body">photos of the real pedals, or clean sketches with every control labelled.</div>
               <div class="tabs">
                 ${FACE_TABS.map(
-                  (t) => html`
+      (t) => html`
                     <button
                       class="tab"
                       style=${st.face === t.id ? 'background:var(--sky);box-shadow:2px 2px 0 var(--ink)' : 'background:transparent;opacity:.55'}
@@ -241,31 +244,72 @@ export class SettingsModal extends LitElement {
                       ${t.label}
                     </button>
                   `,
-                )}
+    )}
               </div>
             </div>
 
+            ${bgDevices.length > 0
+        ? html`
+                  <div class="section" style="padding-top:4px">
+                    <div class="group-title">background</div>
+                    <div class="group-body">animated doodles behind each pedal — react when you stomp.</div>
+                    <div style="display:flex;flex-direction:column;gap:12px">
+                      ${bgDevices.map((id) => {
+          const dev = HardwareRegistry.getDevice(id);
+          const opts = [...BG_STYLES[id], ['off', 'off'] as const];
+          const cur = st.bgBy[id] || 'off';
+          return html`
+                          <div style="display:flex;flex-direction:column;gap:7px">
+                            <div style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600">
+                              <span
+                                style="width:12px;height:12px;flex:none;border-radius:4px;border:2px solid #16323d;background:${dev?.accent ?? '#ccc'}"
+                              ></span>
+                              <span>${dev?.name ?? id}</span>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:7px">
+                              ${opts.map(([styleId, label]) => {
+            const on = cur === styleId;
+            return html`
+                                  <button
+                                    style="flex:1;min-width:84px;padding:9px 10px;border-radius:14px;font-size:13px;font-weight:600;border:2.5px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;${on
+                ? 'background:#8fd0e6;box-shadow:2px 2px 0 #16323d'
+                : 'background:transparent;opacity:.55'}"
+                                    @click=${() => this.store.setPedalBg(id, styleId)}
+                                  >
+                                    ${label}
+                                  </button>
+                                `;
+          })}
+                            </div>
+                          </div>
+                        `;
+        })}
+                    </div>
+                  </div>
+                `
+        : null}
+
             ${canName
-              ? html`
+        ? html`
                   <div class="section" style="padding-top:4px;padding-bottom:22px">
                     <div class="group-title">device conventions</div>
                     <div class="group-body">you write it once, on the strip. here's what each part of the rig renders of it.</div>
                     <div class="conventions-container">
                       ${namingTargets.map((t, ti) => {
-                        const sc = this.store.colorFor(t.id, idNow.color);
-                        const bg = t.name === 0 ? '#f7f1e3' : sc ? HEX[sc] : '#16323d';
-                        const ink = t.name === 0 ? '#16323d' : t.text ? TEXTHEX[idNow.textColor] : isDark(bg) ? '#f7f1e3' : '#16323d';
-                        const caps: string[] = [];
-                        if (t.name) caps.push(`${t.name} char${t.secondary ? ' × 2 lines' : ''}`);
-                        else caps.push('no display');
-                        if (t.colors === null) caps.push('any colour');
-                        else if (t.colors.length) caps.push(`${t.colors.length} leds`);
+          const sc = this.store.colorFor(t.id, idNow.color);
+          const bg = t.name === 0 ? '#f7f1e3' : sc ? HEX[sc] : '#16323d';
+          const ink = t.name === 0 ? '#16323d' : t.text ? TEXTHEX[idNow.textColor] : isDark(bg) ? '#f7f1e3' : '#16323d';
+          const caps: string[] = [];
+          if (t.name) caps.push(`${t.name} char${t.secondary ? ' × 2 lines' : ''}`);
+          else caps.push('no display');
+          if (t.colors === null) caps.push('any colour');
+          else if (t.colors.length) caps.push(`${t.colors.length} leds`);
 
-                        const renderName = t.name ? idNow.name.slice(0, t.name) : idNow.name;
-                        const hasSecondary = t.secondary > 0 && !!idNow.secondary;
-                        const renderSecondary = idNow.secondary.slice(0, t.secondary);
+          const renderName = t.name ? idNow.name.slice(0, t.name) : idNow.name;
+          const hasSecondary = t.secondary > 0 && !!idNow.secondary;
+          const renderSecondary = idNow.secondary.slice(0, t.secondary);
 
-                        return html`
+          return html`
                           <div
                             class="convention-row"
                             style="background:${ti % 2 ? 'var(--card)' : 'var(--paper)'};${ti ? 'border-top:2px solid var(--ink)' : ''}"
@@ -286,38 +330,37 @@ export class SettingsModal extends LitElement {
                             </div>
                           </div>
                         `;
-                      })}
+        })}
                     </div>
 
                     ${shared.length > 0
-                      ? html`
+            ? html`
                           <div class="shared-row">
                             <span class="shared-lbl">shared</span>
                             <div class="swatches-wrap">
                               ${PALETTE.map(([cName, hex]) => {
-                                const allowed = shared.includes(cName);
-                                return html`
+              const allowed = shared.includes(cName);
+              return html`
                                   <span
                                     class="swatch-item"
                                     title=${allowed ? cName : `${cName} — out of range for this rig`}
                                     style="background:${hex};${allowed ? '' : 'opacity:.18'}"
                                   ></span>
                                 `;
-                              })}
+            })}
                             </div>
                           </div>
                           <div class="shared-note">
                             ${dimmed.length
-                              ? `the picker only offers these. ${dimmed.join(', ')} ${
-                                  dimmed.length === 1 ? 'is' : 'are'
-                                } out of range — a colour already set stays put and gets flagged rather than snapping.`
-                              : 'every device in the rig can light every colour in the picker.'}
+                ? `the picker only offers these. ${dimmed.join(', ')} ${dimmed.length === 1 ? 'is' : 'are'
+                } out of range — a colour already set stays put and gets flagged rather than snapping.`
+                : 'every device in the rig can light every colour in the picker.'}
                           </div>
                         `
-                      : null}
+            : null}
                   </div>
                 `
-              : null}
+        : null}
           </div>
           <div class="foot">
             <button class="btn-rerun" @click=${() => this.store.rerunSetup()}>walk me through the rig again</button>

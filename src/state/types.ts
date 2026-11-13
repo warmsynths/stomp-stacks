@@ -217,6 +217,8 @@ export interface StompState {
   focus: string | null;
   /** Left Capabilities & Actions drawer open state. */
   libOpen: boolean;
+  /** Active device filter in the Capabilities drawer (null = all pedals). */
+  libDev: string | null;
   /** Which Capability accordions are expanded in the left drawer. */
   capOpen: Record<string, boolean>;
   /** Active Capability Lens filter highlighting matching switches and controls. */
@@ -247,4 +249,47 @@ export interface StompState {
   lit: { device: string; control: string } | null;
   /** Preset jump popover open state when Scribble 128-preset nav is active. */
   jumpOpen: boolean;
+
+  // --- Rig Persistence & Pedal Background Animations ---
+  /** Saved rigs persisted in localStorage. */
+  rigs: SavedRigRecord[];
+  /** Currently active saved rig ID. */
+  rigId: string | null;
+  /** Header rig switcher menu open state. */
+  rigMenuOpen: boolean;
+  /** Inline rename mode inside the rig switcher menu. */
+  rigRenaming: boolean;
+  /** Draft rig name while renaming. */
+  rigDraft: string;
+  /** 2-tap delete confirmation state in the rig switcher menu. */
+  rigDeleteConfirm: boolean;
+  /** Per-pedal background animation style IDs (or 'off'). */
+  bgBy: Record<string, string>;
+}
+
+export interface SavedRigSnapshot {
+  banks: Bank[];
+  controllerId: string;
+  brainId: string;
+  channels: Record<string, number>;
+  rig: string[];
+  naming: Record<string, PresetNaming>;
+  actions: ActionDef[];
+  pedalSets: PedalSetup[];
+  offsets: Record<string, number>;
+}
+
+export interface SavedRigRecord {
+  id: string;
+  name: string;
+  data: SavedRigSnapshot;
+  updated: number;
+  sent: SavedRigSnapshot | null;
+  sentAt: number | null;
+}
+
+export interface RigSyncInfo {
+  n: number;
+  label: string;
+  tone: 'none' | 'dirty' | 'ok';
 }
