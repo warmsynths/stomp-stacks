@@ -1,5 +1,5 @@
 import type { StompState, MacroStep } from '../../state/types.js';
-import { ACTIONS, type ActionId } from '../../data/controllers.js';
+import { ACTIONS, CONTROLLERS, type ActionId } from '../../data/controllers.js';
 import { HardwareRegistry } from '../../data/registry.js';
 import {
   type ScribbleConfig,
@@ -89,88 +89,195 @@ export function compileHardwareScribbleConfig(state: StompState, targetVersion?:
   const fwMajor = targetVersion || state.scribbleFirmware?.major || 'v1';
   const isV2 = fwMajor === 'v2';
   const bankSettings: ScribbleBankSetting[] = [];
-  const keys = ['A', 'B', 'C', 'D'];
+  const ctrl = CONTROLLERS[state.controllerId] || CONTROLLERS.chocolate;
+  const isScribbleCtrl = state.controllerId === 'scribble' || !!ctrl?.isBrain || !!ctrl?.nav;
+  const ctrlKeys = ctrl?.keys || ['A', 'B', 'C', 'D'];
 
-  for (let i = 0; i < BANK_COUNT; i++) {
-    const bankIndex = Math.floor(i / keys.length);
-    const keyIndex = i % keys.length;
-    const switchKey = keys[keyIndex];
-    const namingKey = `${bankIndex}:${switchKey}`;
-    const customNaming = state.naming?.[namingKey];
+  if (isScribbleCtrl) {
+    for (let i = 0; i < BANK_COUNT; i++) {
+      const bankIndex = i;
+      const namingKeyL = `${bankIndex}:L`;
+      const namingKeyR = `${bankIndex}:R`;
+      const customNaming = state.naming?.[namingKeyL] || state.naming?.[namingKeyR] || state.naming?.[`${bankIndex}:A`];
 
-    let bankName = `Preset ${i + 1}`;
-    let secondaryText = `Second. ${i + 1}`;
-    let presetColour = 0;
-    const messages: ScribbleMessage[] = [];
+      let bankName = `Preset ${i + 1}`;
+      let secondaryText = `Second. ${i + 1}`;
+      let presetColour = 0;
 
-    const isPopulated = bankIndex < state.banks.length;
-    if (isPopulated) {
-      const bank = state.banks[bankIndex];
+      const isPopulated = bankIndex < state.banks.length;
+      const bank = isPopulated ? state.banks[bankIndex] : null;
+
+      const lPress = bank?.['L']?.['press'] || [];
+      const lHold = bank?.['L']?.['hold'] || [];
+      const rPress = bank?.['R']?.['press'] || [];
+      const rHold = bank?.['R']?.['hold'] || [];
+
+      const toMsg = (step: MacroStep): ScribbleMessage => {
+        const d = describeStep(step, state.channels);
+        return {
+          statusByte: d.message.statusByte,
+          dataByte1: d.message.dataByte1,
+          dataByte2: d.message.dataByte2,
+          outputs: { ...ALL_OUTPUTS },
+        };
+      };
+
+      const lPressMsgs = lPress.map(toMsg);
+      const lHoldMsgs = lHold.map(toMsg);
+      const rPressMsgs = rPress.map(toMsg);
+      const rHoldMsgs = rHold.map(toMsg);
+
+      const allSteps = [...lPress, ...lHold, ...rPress, ...rHold];
       const pedalNamesSet = new Set<string>();
       const stepLabels: string[] = [];
 
-      ACTIONS.forEach(({ id: action }) => {
-        const steps = bank[switchKey]?.[action] || [];
-        steps.forEach((step) => {
-          const d = describeStep(step, state.channels);
-          pedalNamesSet.add(d.deviceName.toUpperCase());
-          if (stepLabels.length < 3) {
-            stepLabels.push(d.stepLabel ? `${d.deviceName.toUpperCase()} ${d.stepLabel}` : `${d.deviceName} ${d.label}`);
-          }
-          if (!presetColour) {
-            presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
-          }
-          messages.push({
-            statusByte: d.message.statusByte,
-            dataByte1: d.message.dataByte1,
-            dataByte2: d.message.dataByte2,
-            outputs: { ...ALL_OUTPUTS },
-          });
-        });
+      allSteps.forEach((step) => {
+        const d = describeStep(step, state.channels);
+        pedalNamesSet.add(d.deviceName.toUpperCase());
+        if (stepLabels.length < 3) {
+          stepLabels.push(d.stepLabel ? `${d.deviceName.toUpperCase()} ${d.stepLabel}` : `${d.deviceName} ${d.label}`);
+        }
+        if (!presetColour) {
+          presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
+        }
       });
 
       if (customNaming?.name) {
         bankName = customNaming.name;
-      } else if (messages.length > 0) {
+      } else if (allSteps.length > 0) {
         const pedalsArr = Array.from(pedalNamesSet);
-        bankName = pedalsArr.length ? pedalsArr.join(' + ') : `BANK ${bankIndex + 1}`;
+        bankName = pedalsArr.length ? pedalsArr.join(' + ') : `Preset ${i + 1}`;
       }
 
       if (customNaming?.secondary) {
         secondaryText = customNaming.secondary;
-      } else if (messages.length > 0) {
-        secondaryText = stepLabels.join(' · ') || `Bank ${bankIndex + 1}`;
+      } else if (allSteps.length > 0) {
+        secondaryText = stepLabels.join(' · ') || `Preset ${i + 1}`;
       }
 
       if (customNaming?.color && HEX[customNaming.color]) {
         presetColour = hexToRgbInt(HEX[customNaming.color]);
       }
+
+      const primaryPresetMsgs = (lPressMsgs.length > 0 ? lPressMsgs : rPressMsgs).slice(0, MAX_MESSAGES_PER_STACK);
+      const hasContent = allSteps.length > 0 || !!customNaming?.name || !!customNaming?.color;
+
+      bankSettings.push({
+        bankId: i,
+        bankName: bankName.slice(0, MAX_BANK_TEXT_LENGTH),
+        secondaryText: secondaryText.slice(0, MAX_BANK_TEXT_LENGTH),
+        colourOverride: hasContent,
+        colour: hasContent ? (presetColour || 582655) : 0,
+        textColourOverride: hasContent,
+        textColour: hasContent ? 16777215 : 0,
+        midiValueDisplayOverride: false,
+        midiValueDisplay: allSteps.length > 0 ? 'valueOnly' : 'none',
+        midiValueDisplayCC: 0,
+        bpm: 120,
+        switches: [
+          {
+            pressMessages: { numMessages: lPressMsgs.length, messages: lPressMsgs.slice(0, MAX_MESSAGES_PER_STACK) },
+            holdMessages: { numMessages: lHoldMsgs.length, messages: lHoldMsgs.slice(0, MAX_MESSAGES_PER_STACK) },
+          },
+          {
+            pressMessages: { numMessages: rPressMsgs.length, messages: rPressMsgs.slice(0, MAX_MESSAGES_PER_STACK) },
+            holdMessages: { numMessages: rHoldMsgs.length, messages: rHoldMsgs.slice(0, MAX_MESSAGES_PER_STACK) },
+          },
+        ],
+        customMessages: { numMessages: 0, messages: [] },
+        presetMessages: {
+          numMessages: primaryPresetMsgs.length,
+          messages: primaryPresetMsgs,
+        },
+      });
     }
+  } else {
+    const keys = ctrlKeys;
+    for (let i = 0; i < BANK_COUNT; i++) {
+      const bankIndex = Math.floor(i / keys.length);
+      const keyIndex = i % keys.length;
+      const switchKey = keys[keyIndex];
+      const namingKey = `${bankIndex}:${switchKey}`;
+      const customNaming = state.naming?.[namingKey];
 
-    const presetMessages = messages.slice(0, MAX_MESSAGES_PER_STACK);
+      let bankName = `Preset ${i + 1}`;
+      let secondaryText = `Second. ${i + 1}`;
+      let presetColour = 0;
+      const messages: ScribbleMessage[] = [];
 
-    bankSettings.push({
-      bankId: i,
-      bankName: bankName.slice(0, MAX_BANK_TEXT_LENGTH),
-      secondaryText: secondaryText.slice(0, MAX_BANK_TEXT_LENGTH),
-      colourOverride: messages.length > 0 || !!customNaming?.color,
-      colour: messages.length > 0 || customNaming?.color ? (presetColour || 582655) : 0,
-      textColourOverride: messages.length > 0 || !!customNaming?.color,
-      textColour: messages.length > 0 || customNaming?.color ? 16777215 : 0,
-      midiValueDisplayOverride: false,
-      midiValueDisplay: messages.length > 0 ? 'valueOnly' : 'none',
-      midiValueDisplayCC: 0,
-      bpm: 120,
-      switches: [
-        { pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
-        { pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
-      ],
-      customMessages: { numMessages: 0, messages: [] },
-      presetMessages: {
-        numMessages: presetMessages.length,
-        messages: presetMessages,
-      },
-    });
+      const isPopulated = bankIndex < state.banks.length;
+      if (isPopulated) {
+        const bank = state.banks[bankIndex];
+        const pedalNamesSet = new Set<string>();
+        const stepLabels: string[] = [];
+
+        ACTIONS.forEach(({ id: action }) => {
+          const steps = bank[switchKey]?.[action] || [];
+          steps.forEach((step) => {
+            const d = describeStep(step, state.channels);
+            pedalNamesSet.add(d.deviceName.toUpperCase());
+            if (stepLabels.length < 3) {
+              stepLabels.push(d.stepLabel ? `${d.deviceName.toUpperCase()} ${d.stepLabel}` : `${d.deviceName} ${d.label}`);
+            }
+            if (!presetColour) {
+              presetColour = HardwareRegistry.getDeviceAccentColorInt(step.device);
+            }
+            messages.push({
+              statusByte: d.message.statusByte,
+              dataByte1: d.message.dataByte1,
+              dataByte2: d.message.dataByte2,
+              outputs: { ...ALL_OUTPUTS },
+            });
+          });
+        });
+
+        if (customNaming?.name) {
+          bankName = customNaming.name;
+        } else if (messages.length > 0) {
+          const pedalsArr = Array.from(pedalNamesSet);
+          bankName = pedalsArr.length ? pedalsArr.join(' + ') : `BANK ${bankIndex + 1}`;
+        }
+
+        if (customNaming?.secondary) {
+          secondaryText = customNaming.secondary;
+        } else if (messages.length > 0) {
+          secondaryText = stepLabels.join(' · ') || `Bank ${bankIndex + 1}`;
+        }
+
+        if (customNaming?.color && HEX[customNaming.color]) {
+          presetColour = hexToRgbInt(HEX[customNaming.color]);
+        }
+      }
+
+      const presetMessages = messages.slice(0, MAX_MESSAGES_PER_STACK);
+      const hasContent = messages.length > 0 || !!customNaming?.name || !!customNaming?.color;
+
+      bankSettings.push({
+        bankId: i,
+        bankName: bankName.slice(0, MAX_BANK_TEXT_LENGTH),
+        secondaryText: secondaryText.slice(0, MAX_BANK_TEXT_LENGTH),
+        colourOverride: hasContent,
+        colour: hasContent ? (presetColour || 582655) : 0,
+        textColourOverride: hasContent,
+        textColour: hasContent ? 16777215 : 0,
+        midiValueDisplayOverride: false,
+        midiValueDisplay: messages.length > 0 ? 'valueOnly' : 'none',
+        midiValueDisplayCC: 0,
+        bpm: 120,
+        switches: [
+          {
+            pressMessages: { numMessages: presetMessages.length, messages: presetMessages },
+            holdMessages: { numMessages: 0, messages: [] },
+          },
+          { pressMessages: { numMessages: 0, messages: [] }, holdMessages: { numMessages: 0, messages: [] } },
+        ],
+        customMessages: { numMessages: 0, messages: [] },
+        presetMessages: {
+          numMessages: presetMessages.length,
+          messages: presetMessages,
+        },
+      });
+    }
   }
 
   if (isV2) {
@@ -222,18 +329,9 @@ export function compileHardwareScribbleConfig(state: StompState, targetVersion?:
         staticIp: '0.0.0.0',
         gatewayIp: '0.0.0.0',
       },
+      bankSettings,
       presetSettings: bankSettings,
     };
-
-    // Non-enumerable alias so legacy accessors like config.bankSettings still work
-    // without polluting JSON.stringify() or Object.keys().
-    Object.defineProperty(result, 'bankSettings', {
-      get() {
-        return this.presetSettings;
-      },
-      enumerable: false,
-      configurable: true,
-    });
 
     return result;
   }
@@ -490,22 +588,87 @@ export function parseAllScribblePresets(
         validBankId = idx;
       }
 
+      const msgMatches = (a: any, b: any) => {
+        const sA = Array.isArray(a) ? a[0] : a?.statusByte;
+        const d1A = Array.isArray(a) ? a[1] : a?.dataByte1;
+        const d2A = Array.isArray(a) ? a[2] : a?.dataByte2;
+        const sB = Array.isArray(b) ? b[0] : b?.statusByte;
+        const d1B = Array.isArray(b) ? b[1] : b?.dataByte1;
+        const d2B = Array.isArray(b) ? b[2] : b?.dataByte2;
+        return sA === sB && d1A === d1B && d2A === d2B;
+      };
+
+      const isScribbleKeys = keys.length === 2 && keys[0] === 'L' && keys[1] === 'R';
+      if (isScribbleKeys) {
+        const slotNumber = validBankId + 1;
+        const bankIndex = validBankId;
+
+        const pMsgs = Array.isArray(preset.presetMessages?.messages) ? preset.presetMessages.messages : [];
+        const lMsgs = Array.isArray(preset.switches?.[0]?.pressMessages?.messages) ? preset.switches[0].pressMessages.messages : [];
+        const rMsgs = Array.isArray(preset.switches?.[1]?.pressMessages?.messages) ? preset.switches[1].pressMessages.messages : [];
+
+        const lCombined = [...lMsgs];
+        pMsgs.forEach((pm: any) => {
+          if (!lCombined.some((lm) => msgMatches(pm, lm))) {
+            lCombined.push(pm);
+          }
+        });
+
+        const lSteps = parseMessageList(lCombined);
+        const lNaming = extractPresetNaming(preset, 0, lSteps, bankIndex);
+        const color = parseScribbleColor(preset.colour ?? preset.color ?? preset.mainColour ?? preset.strip?.mainColour);
+
+        const hasCustomTitle = lNaming.presetName && !lNaming.presetName.match(/^Preset \d+$/i);
+        const hasCustomSub = lNaming.secondaryText && !lNaming.secondaryText.match(/^Second\. \d+$/i);
+
+        if (hasCustomTitle || hasCustomSub || lSteps.length > 0 || color) {
+          presets.push({
+            bankIndex,
+            key: 'L',
+            presetName: lNaming.presetName,
+            secondaryText: lNaming.secondaryText,
+            steps: lSteps,
+            slotNumber,
+            color,
+          });
+        }
+
+        const rSteps = parseMessageList(rMsgs);
+        if (rSteps.length > 0) {
+          presets.push({
+            bankIndex,
+            key: 'R',
+            presetName: lNaming.presetName,
+            secondaryText: lNaming.secondaryText,
+            steps: rSteps,
+            slotNumber,
+            color,
+          });
+        }
+        return;
+      }
+
       const slotNumber = validBankId + 1;
       const bankIndex = Math.floor((slotNumber - 1) / keys.length);
       const keyIndex = (slotNumber - 1) % keys.length;
       const key = keys[keyIndex] || 'A';
 
-      const presetMsgs = preset.presetMessages?.messages || [];
-      const customMsgs = preset.customMessages?.messages || [];
-      const switchMsgs = preset.switches?.[keyIndex]?.pressMessages?.messages || [];
-      const directMsgs = preset.messages || [];
+      const presetMsgs = Array.isArray(preset.presetMessages?.messages) ? preset.presetMessages.messages : [];
+      const customMsgs = Array.isArray(preset.customMessages?.messages) ? preset.customMessages.messages : [];
+      const switchMsgs = Array.isArray(preset.switches?.[keyIndex]?.pressMessages?.messages) ? preset.switches[keyIndex].pressMessages.messages : [];
+      const directMsgs = Array.isArray(preset.messages) ? preset.messages : [];
 
-      const combinedMsgs = [
-        ...(Array.isArray(presetMsgs) ? presetMsgs : []),
-        ...(Array.isArray(customMsgs) ? customMsgs : []),
-        ...(Array.isArray(switchMsgs) ? switchMsgs : []),
-        ...(Array.isArray(directMsgs) ? directMsgs : []),
-      ];
+      const combinedMsgs = [...presetMsgs, ...customMsgs];
+      switchMsgs.forEach((sm: any) => {
+        if (!combinedMsgs.some((pm) => msgMatches(pm, sm))) {
+          combinedMsgs.push(sm);
+        }
+      });
+      directMsgs.forEach((dm: any) => {
+        if (!combinedMsgs.some((pm) => msgMatches(pm, dm))) {
+          combinedMsgs.push(dm);
+        }
+      });
 
       const steps = parseMessageList(combinedMsgs);
       const naming = extractPresetNaming(preset, keyIndex, steps, bankIndex);

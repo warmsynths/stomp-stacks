@@ -198,4 +198,61 @@ describe('Scribble Schema Validation & Firmware Versioning', () => {
     expect(store.state.scribbleFirmware.major).toBe('v2');
     expect(store.state.scribbleFirmware.version).toBe('2.0.0');
   });
+
+  it('correctly compiles Scribble controller presets with Mood steps, custom name, and color', () => {
+    const store = new StompStore();
+    store.switchController('scribble');
+    store.setBrowseDevice('mood');
+
+    // Add mood step to Preset 1 (bank 0), Left switch (key 'L')
+    store.addStep('clock', 64);
+    store.setIdent({ name: 'MOOD GLOW', secondary: 'Clock Drift', color: 'cyan' });
+
+    // Add mood step to Preset 2 (bank 1), auto-named
+    store.selectBank(1);
+    store.addStep('reverb', 90);
+
+    const config = compileHardwareScribbleConfig(store.state, 'v2');
+    const p1 = config.presetSettings![0];
+    const p2 = config.presetSettings![1];
+
+    // Preset 1 verification
+    expect(p1.bankId).toBe(0);
+    expect(p1.bankName).toBe('MOOD GLOW');
+    expect(p1.secondaryText).toBe('Clock Drift');
+    expect(p1.colourOverride).toBe(true);
+    expect(p1.colour).toBe(0x8fd0e6); // cyan hex #8FD0E6
+    expect(p1.switches[0].pressMessages.numMessages).toBe(1);
+    expect(p1.switches[0].pressMessages.messages[0].dataByte1).toBe(18); // mood clock CC
+    expect(p1.presetMessages.numMessages).toBe(1);
+    expect(p1.presetMessages.messages[0].dataByte1).toBe(18);
+
+    // Preset 2 verification (auto-named from pedal)
+    expect(p2.bankId).toBe(1);
+    expect(p2.bankName).toBe('MOOD');
+    expect(p2.colourOverride).toBe(true);
+    expect(p2.switches[0].pressMessages.numMessages).toBe(1);
+    expect(p2.presetMessages.numMessages).toBe(1);
+
+    // Both bankSettings and presetSettings available in config
+    expect(config.bankSettings).toBeDefined();
+    expect(config.presetSettings).toBeDefined();
+  });
+
+  it('compiles with MC3 controller using 3 keys per bank', () => {
+    const store = new StompStore();
+    store.switchController('mc3');
+    store.setBrowseDevice('mood');
+
+    // Bank 0, switch C
+    store.selectKey('C');
+    store.addStep('clock', 64);
+
+    const config = compileHardwareScribbleConfig(store.state, 'v2');
+    // On MC3 with keys A, B, C: Bank 0 Switch C is slot 3 (index 2)
+    const p3 = config.presetSettings![2];
+    expect(p3.bankId).toBe(2);
+    expect(p3.presetMessages.numMessages).toBe(1);
+    expect(p3.presetMessages.messages[0].dataByte1).toBe(18);
+  });
 });
