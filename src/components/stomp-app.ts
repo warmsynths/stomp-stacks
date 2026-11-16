@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { createRef, ref } from 'lit/directives/ref.js';
 import {
   tokens,
   resetAndButton,
@@ -75,6 +76,7 @@ export class StompApp extends LitElement {
   ];
 
   private store = new StompStore();
+  private rigFileRef = createRef<HTMLInputElement>();
 
   constructor() {
     super();
@@ -104,11 +106,9 @@ export class StompApp extends LitElement {
   }
 
   private pipStyle(on: boolean) {
-    return `width:6px;height:6px;flex:none;border-radius:50%;background:${
-      on ? '#5bb85b' : 'rgba(22,50,61,.25)'
-    };transition:background 200ms ease${
-      on ? ';animation:breathe 2.4s ease-in-out infinite' : ''
-    }`;
+    return `width:6px;height:6px;flex:none;border-radius:50%;background:${on ? '#5bb85b' : 'rgba(22,50,61,.25)'
+      };transition:background 200ms ease${on ? ';animation:breathe 2.4s ease-in-out infinite' : ''
+      }`;
   }
 
   private renderHeaderRig() {
@@ -119,12 +119,12 @@ export class StompApp extends LitElement {
     const pedalSummary =
       st.rig.length <= 2
         ? st.rig
-            .map((id) => HardwareRegistry.getDevice(id)?.name || id)
-            .join(', ')
+          .map((id) => HardwareRegistry.getDevice(id)?.name || id)
+          .join(', ')
         : `${st.rig
-            .slice(0, 2)
-            .map((id) => HardwareRegistry.getDevice(id)?.name || id)
-            .join(', ')} +${st.rig.length - 2}`;
+          .slice(0, 2)
+          .map((id) => HardwareRegistry.getDevice(id)?.name || id)
+          .join(', ')} +${st.rig.length - 2}`;
 
     const rigChip = (bg: string) =>
       `display:flex;flex-direction:column;align-items:flex-start;padding:5px 12px;border-radius:14px;border:2px solid #16323d;background:${bg};line-height:1.3;text-align:left;transition:box-shadow 150ms cubic-bezier(.23,1,.32,1)`;
@@ -144,13 +144,13 @@ export class StompApp extends LitElement {
               <span style=${this.pipStyle(!!st.conn[st.controllerId])}></span>
               <span>${ctrl.isBrain ? 'controller · brain' : 'controller'}</span>
               ${ctrl.isBrain && st.scribbleFirmware
-                ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
-                : null}
+          ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
+          : null}
             </span>
             <span style="font-size:12.5px;font-weight:600">${ctrl.short}</span>
           </button>
           ${!ctrl.isBrain
-            ? html`
+          ? html`
                 <span style="font-size:12px;opacity:.3;padding:0 7px">→</span>
                 <button
                   class="hover-shadow"
@@ -163,20 +163,20 @@ export class StompApp extends LitElement {
                   >
                     <span
                       style=${this.pipStyle(
-                        st.brainId === 'scribble' && !!st.conn['scribble']
-                      )}
+            st.brainId === 'scribble' && !!st.conn['scribble']
+          )}
                     ></span>
                     <span>brain</span>
                     ${st.brainId === 'scribble' && st.scribbleFirmware
-                      ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
-                      : null}
+              ? html`<span style="padding:1px 4px;border-radius:4px;background:rgba(22,50,61,0.12);font-size:8.5px;letter-spacing:0">${st.scribbleFirmware.version.startsWith('2') ? 'v2' : 'v1'}</span>`
+              : null}
                   </span>
                   <span style="font-size:12.5px;font-weight:600"
                     >${brain.short}</span
                   >
                 </button>
               `
-            : null}
+          : null}
           <span style="font-size:12px;opacity:.3;padding:0 7px">→</span>
           <div style="${rigChip('#f7f1e3')};cursor:default">
             <span
@@ -187,8 +187,8 @@ export class StompApp extends LitElement {
               ></span>
               <span
                 >${livePedals
-                  ? `pedals ${livePedals}/${st.rig.length}`
-                  : 'pedals'}</span
+          ? `pedals ${livePedals}/${st.rig.length}`
+          : 'pedals'}</span
               >
             </span>
             <span style="font-size:12.5px;font-weight:600"
@@ -246,9 +246,9 @@ export class StompApp extends LitElement {
         ? html`
             <div
               style="position:relative;z-index:15;flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 ${this
-                .desktop
-                ? 26
-                : 14}px 6px;padding:8px 10px 8px 12px;border-radius:16px;border:2.5px solid #16323d;background:${lensCap.colour}66;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)"
+            .desktop
+            ? 26
+            : 14}px 6px;padding:8px 10px 8px 12px;border-radius:16px;border:2.5px solid #16323d;background:${lensCap.colour}66;animation:stepIn 160ms cubic-bezier(.23,1,.32,1)"
             >
               <span
                 style="width:14px;height:14px;flex:none;border-radius:5px;border:2px solid #16323d;background:${lensCap.colour}"
@@ -258,32 +258,32 @@ export class StompApp extends LitElement {
               >
               <span style="font-size:12px;opacity:.65;flex:none"
                 >${lensUses.length
-                  ? 'is on'
-                  : "isn't on any stack yet — the pedal shows what its actions reach"}</span
+            ? 'is on'
+            : "isn't on any stack yet — the pedal shows what its actions reach"}</span
               >
               <div
                 style="display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0"
               >
                 ${lensUses.slice(0, 40).map((u) => {
-                  const here =
-                    u.bi === st.bank &&
-                    u.k === st.selectedKey &&
-                    u.a === st.action;
-                  return html`
+              const here =
+                u.bi === st.bank &&
+                u.k === st.selectedKey &&
+                u.a === st.action;
+              return html`
                     <button
                       style="flex:none;padding:3px 9px;border-radius:10px;border:2px solid #16323d;font-family:'DM Mono',monospace;font-size:11px;background:${here
-                        ? '#16323d'
-                        : '#fffbf0'};color:${here ? '#fdf3d4' : '#16323d'}"
+                  ? '#16323d'
+                  : '#fffbf0'};color:${here ? '#fdf3d4' : '#16323d'}"
                       @click=${() => {
-                        this.store.setBank(u.bi);
-                        this.store.selectSwitch(u.k);
-                        this.store.selectAction(u.a as any);
-                      }}
+                  this.store.setBank(u.bi);
+                  this.store.selectSwitch(u.k);
+                  this.store.selectAction(u.a as any);
+                }}
                     >
                       ${u.label}
                     </button>
                   `;
-                })}
+            })}
               </div>
               <button
                 title="turn the lens off"
@@ -299,19 +299,18 @@ export class StompApp extends LitElement {
         ? html`
             <div
               style="flex:none;display:flex;align-items:center;gap:10px;margin:0 ${this
-                .desktop
-                ? 26
-                : 14}px 6px;padding:8px 13px;border-radius:14px;font-size:12.5px;line-height:1.4;text-wrap:pretty;border:2px solid #16323d;background:#f7c948"
+            .desktop
+            ? 26
+            : 14}px 6px;padding:8px 13px;border-radius:14px;font-size:12.5px;line-height:1.4;text-wrap:pretty;border:2px solid #16323d;background:#f7c948"
             >
               <span style="flex:1;min-width:0;text-wrap:pretty">
                 editing “${ea.name}” — tap a control to add it. its number
                 matches the list on the right, where you set its value.${usage[
-                  ea.id
-                ]
-                  ? ` changes reach all ${usage[ea.id]} ${
-                      usage[ea.id] === 1 ? 'place' : 'places'
-                    } it's used.`
-                  : ''}
+            ea.id
+          ]
+            ? ` changes reach all ${usage[ea.id]} ${usage[ea.id] === 1 ? 'place' : 'places'
+            } it's used.`
+            : ''}
               </span>
               <button
                 style="flex:none;padding:6px 14px;border-radius:14px;background:#16323d;color:#fdf3d4;font-size:12.5px;font-weight:600"
@@ -339,21 +338,15 @@ export class StompApp extends LitElement {
         ? `${st.selectedKey === 'L' ? 'left' : 'right'} switch`
         : `switch ${st.selectedKey}`) + ` · ${curActLabel}`;
 
-    const headerStyle = `display:flex;align-items:center;gap:${
-      this.phone ? 6 : 14
-    }px;padding:0 ${
-      this.desktop ? 26 : this.phone ? 10 : 14
-    }px;height:${
-      this.desktop ? 70 : 58
-    }px;flex:none;border-bottom:2.5px solid #16323d;background:#fffbf0`;
-    const logoStyle = `width:${this.desktop ? 30 : 28}px;height:${
-      this.desktop ? 30 : 28
-    }px;border-radius:9px;background:#f7c948;border:2.5px solid #16323d;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700`;
-    const wordmarkStyle = `font-size:${
-      this.desktop ? 19 : 16.5
-    }px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;display:${
-      this.phone ? 'none' : 'inline'
-    }`;
+    const headerStyle = `display:flex;align-items:center;gap:${this.phone ? 6 : 14
+      }px;padding:0 ${this.desktop ? 26 : this.phone ? 10 : 14
+      }px;height:${this.desktop ? 70 : 58
+      }px;flex:none;border-bottom:2.5px solid #16323d;background:#fffbf0`;
+    const logoStyle = `width:${this.desktop ? 30 : 28}px;height:${this.desktop ? 30 : 28
+      }px;border-radius:9px;background:#f7c948;border:2.5px solid #16323d;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700`;
+    const wordmarkStyle = `font-size:${this.desktop ? 19 : 16.5
+      }px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;display:${this.phone ? 'none' : 'inline'
+      }`;
 
     const hPedalBody =
       build && ea
@@ -366,6 +359,7 @@ export class StompApp extends LitElement {
           <div style="display:flex;align-items:center;gap:10px;flex:none">
             <span style=${logoStyle}>S</span>
             <span style=${wordmarkStyle}>stomp stacks</span>
+            ${this.renderRigSwitch()}
           </div>
 
           <div style="flex:1"></div>
@@ -373,13 +367,13 @@ export class StompApp extends LitElement {
           ${this.renderHeaderRig()}
 
           ${!this.desktop
-            ? html`
+        ? html`
                 <button
                   class="hover-shadow"
                   title="capabilities"
                   style="display:flex;align-items:center;gap:6px;flex:none;padding:7px 11px;border-radius:18px;border:2px solid #16323d;background:${st.libOpen
-                    ? '#f7c948'
-                    : '#fffbf0'};transition:background 150ms ease,box-shadow 150ms ease"
+            ? '#f7c948'
+            : '#fffbf0'};transition:background 150ms ease,box-shadow 150ms ease"
                   @click=${() => this.store.toggleLibOpen()}
                 >
                   <span
@@ -390,28 +384,28 @@ export class StompApp extends LitElement {
                   >
                 </button>
               `
-            : null}
+        : null}
 
           <button
             class="hover-shadow"
             title="plug your gear in over USB"
             style="display:flex;align-items:center;gap:7px;flex:none;padding:${this
-              .desktop
-              ? '8px 13px'
-              : '7px 11px'};border-radius:18px;border:2px solid #16323d;background:${connCount
-              ? '#e7f5e7'
-              : '#fffbf0'};transition:background 150ms ease,box-shadow 150ms ease"
+        .desktop
+        ? '8px 13px'
+        : '7px 11px'};border-radius:18px;border:2px solid #16323d;background:${connCount
+          ? '#e7f5e7'
+          : '#fffbf0'};transition:background 150ms ease,box-shadow 150ms ease"
             @click=${() => this.store.openConnect()}
           >
             <span style=${this.pipStyle(connCount > 0)}></span>
             <span style="font-size:12.5px;font-weight:600"
               >${connCount
-                ? this.phone
-                  ? `${connCount} live`
-                  : `${connCount} plugged in`
-                : this.phone
-                  ? 'usb'
-                  : 'plug in'}</span
+        ? this.phone
+          ? `${connCount} live`
+          : `${connCount} plugged in`
+        : this.phone
+          ? 'usb'
+          : 'plug in'}</span
             >
           </button>
 
@@ -419,10 +413,10 @@ export class StompApp extends LitElement {
             class="hover-mustard"
             title="show or hide the help buttons"
             style="width:${this.desktop ? 38 : 34}px;height:${this.desktop
-              ? 38
-              : 34}px;flex:none;border-radius:50%;border:2.5px solid #16323d;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background 150ms ease;background:${st.hintAll
-              ? '#f7c948'
-              : '#fffbf0'}"
+        ? 38
+        : 34}px;flex:none;border-radius:50%;border:2.5px solid #16323d;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background 150ms ease;background:${st.hintAll
+          ? '#f7c948'
+          : '#fffbf0'}"
             @click=${() => this.store.toggleHintAll()}
           >
             ?
@@ -432,8 +426,8 @@ export class StompApp extends LitElement {
             class="hover-mustard"
             title="face style & rig setup"
             style="width:${this.desktop ? 38 : 34}px;height:${this.desktop
-              ? 38
-              : 34}px;flex:none;border-radius:50%;border:2.5px solid #16323d;background:#fffbf0;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background 150ms ease"
+        ? 38
+        : 34}px;flex:none;border-radius:50%;border:2.5px solid #16323d;background:#fffbf0;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background 150ms ease"
             @click=${() => this.store.openSettings()}
           >
             ⚙
@@ -442,12 +436,12 @@ export class StompApp extends LitElement {
           <button
             class="cook-btn"
             style="display:flex;align-items:center;gap:9px;flex:none;padding:${this
-              .desktop
-              ? '10px 18px'
-              : '9px 14px'};border-radius:22px;background:#f7c948;border:2.5px solid #16323d;box-shadow:3px 3px 0 #16323d;font-size:${this
-              .desktop
-              ? 14
-              : 13}px;font-weight:600;transition:transform 160ms cubic-bezier(.23,1,.32,1),box-shadow 160ms cubic-bezier(.23,1,.32,1)"
+        .desktop
+        ? '10px 18px'
+        : '9px 14px'};border-radius:22px;background:#f7c948;border:2.5px solid #16323d;box-shadow:3px 3px 0 #16323d;font-size:${this
+          .desktop
+          ? 14
+          : 13}px;font-weight:600;transition:transform 160ms cubic-bezier(.23,1,.32,1),box-shadow 160ms cubic-bezier(.23,1,.32,1)"
             @click=${() => this.store.openCompile()}
           >
             <span>${this.winW >= 1280 ? 'cook it up' : 'cook'}</span>
@@ -460,17 +454,17 @@ export class StompApp extends LitElement {
 
         <div
           style="flex:1;min-height:0;display:flex;flex-direction:${this.phone
-            ? 'column'
-            : 'row'}"
+        ? 'column'
+        : 'row'}"
         >
           ${this.desktop
-            ? html`<capabilities-aside
+        ? html`<capabilities-aside
                 .store=${this.store}
               ></capabilities-aside>`
-            : null}
+        : null}
 
           ${!this.desktop && st.libOpen
-            ? html`
+        ? html`
                 <div
                   class="drawer-scrim"
                   @click=${() => this.store.setLibOpen(false)}
@@ -480,29 +474,29 @@ export class StompApp extends LitElement {
                   drawer
                 ></capabilities-aside>
               `
-            : null}
+        : null}
 
           <main
             style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column${this
-              .phone
-              ? ';overflow-y:auto;overflow-x:hidden'
-              : ''}"
+        .phone
+        ? ';overflow-y:auto;overflow-x:hidden'
+        : ''}"
           >
             ${this.phone && !build
-              ? html`
+        ? html`
                   <div style="flex:none;padding:12px 14px 0">
                     <controller-graphic
                       .store=${this.store}
                     ></controller-graphic>
                   </div>
                 `
-              : null}
+        : null}
 
             <div
               style="position:relative;z-index:20;display:flex;align-items:flex-start;gap:12px;padding:${this
-                .desktop
-                ? '14px 26px'
-                : '12px 14px 6px'};flex:none;overflow:visible"
+        .desktop
+        ? '14px 26px'
+        : '12px 14px 6px'};flex:none;overflow:visible"
             >
               <span
                 style="display:flex;align-items:center;gap:6px;flex:none;padding-top:6px"
@@ -512,12 +506,12 @@ export class StompApp extends LitElement {
                   >pedal</span
                 >
                 ${renderHintPopover(
-                  this.store,
-                  'pedal',
-                  'left',
-                  'tapping the pedal',
-                  hPedalBody
-                )}
+          this.store,
+          'pedal',
+          'left',
+          'tapping the pedal',
+          hPedalBody
+        )}
               </span>
               <device-tabs
                 .store=${this.store}
@@ -534,19 +528,18 @@ export class StompApp extends LitElement {
             ></pedal-canvas>
 
             ${st.monitorOn
-              ? html`<wire-monitor .store=${this.store}></wire-monitor>`
-              : null}
+        ? html`<wire-monitor .store=${this.store}></wire-monitor>`
+        : null}
           </main>
 
           <section
             style=${this.phone
-              ? `flex:none;display:flex;flex-direction:column;background:#fffbf0;border-top:2.5px solid #16323d;border-radius:20px 20px 0 0`
-              : `width:${
-                  this.desktop ? 380 : 330
-                }px;flex:none;display:flex;flex-direction:column;background:#fffbf0;border-left:2.5px solid #16323d;min-height:0`}
+        ? `flex:none;display:flex;flex-direction:column;background:#fffbf0;border-top:2.5px solid #16323d;border-radius:20px 20px 0 0`
+        : `width:${this.desktop ? 380 : 330
+        }px;flex:none;display:flex;flex-direction:column;background:#fffbf0;border-left:2.5px solid #16323d;min-height:0`}
           >
             ${!this.phone && !build
-              ? html`
+        ? html`
                   <div
                     style="flex:none;padding:16px 18px 18px;border-bottom:2.5px solid #16323d"
                   >
@@ -556,7 +549,7 @@ export class StompApp extends LitElement {
                     ></controller-graphic>
                   </div>
                 `
-              : null}
+        : null}
 
             <macro-panel
               .store=${this.store}
@@ -577,6 +570,226 @@ export class StompApp extends LitElement {
         <pedal-setups-modal .store=${this.store}></pedal-setups-modal>
         <conflict-modal .store=${this.store}></conflict-modal>
         <setup-wizard-modal .store=${this.store}></setup-wizard-modal>
+        ${this.renderRigMenu()}
+      </div>
+    `;
+  }
+
+  private syncDotColor(tone: 'none' | 'dirty' | 'ok'): string {
+    if (tone === 'ok') return '#7cc68a';
+    if (tone === 'dirty') return '#ef7d5c';
+    return 'rgba(22,50,61,.25)';
+  }
+
+  private renderRigSwitch() {
+    const st = this.store.state;
+    const cur = this.store.currentRig();
+    if (!cur) return null;
+    const sync = this.store.syncInfo(cur, {
+      banks: st.banks,
+      controllerId: st.controllerId,
+      brainId: st.brainId,
+      channels: st.channels,
+      rig: st.rig,
+      naming: st.naming,
+      actions: st.actions,
+      pedalSets: st.pedalSets,
+      offsets: st.offsets,
+    });
+    const dotCol = this.syncDotColor(sync.tone);
+
+    return html`
+      <button
+        class="hover-shadow"
+        title="switch, save or export rig"
+        style="display:flex;align-items:center;gap:8px;padding:${this.phone
+        ? '5px 9px'
+        : '5px 11px'};border-radius:14px;border:2px solid #16323d;background:${st.rigMenuOpen
+          ? '#fdf3d4'
+          : '#fffbf0'};transition:background 150ms ease,box-shadow 150ms ease;max-width:${this
+            .phone
+            ? '150px'
+            : '210px'}"
+        @click=${() => this.store.toggleRigMenu()}
+      >
+        <span
+          style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0"
+        >
+          <span
+            style="font-size:12.5px;font-weight:600;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%"
+            >${cur.name}</span
+          >
+          <span
+            style="display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:9.5px;opacity:.7;white-space:nowrap"
+          >
+            <span
+              style="width:7px;height:7px;flex:none;border-radius:50%;border:1.5px solid #16323d;background:${dotCol}"
+            ></span>
+            ${sync.label}
+          </span>
+        </span>
+        <span style="font-size:10px;opacity:.5">▾</span>
+      </button>
+    `;
+  }
+
+  private renderRigMenu() {
+    const st = this.store.state;
+    if (!st.rigMenuOpen) return null;
+
+    const liveSnap = {
+      banks: st.banks,
+      controllerId: st.controllerId,
+      brainId: st.brainId,
+      channels: st.channels,
+      rig: st.rig,
+      naming: st.naming,
+      actions: st.actions,
+      pedalSets: st.pedalSets,
+      offsets: st.offsets,
+    };
+
+    const menuStyle = `position:fixed;left:${this.phone ? 12 : 18}px;top:${this.desktop ? 62 : 56
+      }px;width:${this.phone ? 'calc(100vw - 24px)' : '320px'};max-height:78vh;z-index:76;display:flex;flex-direction:column;background:#fffbf0;border:2.5px solid #16323d;border-radius:22px;box-shadow:6px 6px 0 #16323d;overflow:hidden;animation:sheetIn 160ms cubic-bezier(.23,1,.32,1)`;
+
+    const canDelete = st.rigs.length >= 2;
+
+    return html`
+      <div
+        style="position:fixed;inset:0;z-index:75"
+        @click=${() => this.store.closeRigMenu()}
+      ></div>
+      <div style=${menuStyle}>
+        <div
+          style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px"
+        >
+          <span
+            style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.55"
+            >your rigs · saved on this device</span
+          >
+        </div>
+
+        <div
+          style="flex:1;min-height:0;overflow:auto;padding:0 6px 6px;display:flex;flex-direction:column;gap:2px"
+        >
+          ${st.rigs.map((r) => {
+      const on = r.id === st.rigId;
+      const sync = this.store.syncInfo(r, on ? liveSnap : undefined);
+      const ctrl = HardwareRegistry.getController(r.data.controllerId);
+      const sub = `${ctrl.short} · ${r.data.rig.length} ${r.data.rig.length === 1 ? 'pedal' : 'pedals'
+        } · ${sync.label}`;
+      return html`
+              <button
+                style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:14px;text-align:left;background:${on
+          ? '#fdf3d4'
+          : 'transparent'};transition:background 140ms ease"
+                @click=${() => this.store.switchRig(r.id)}
+              >
+                <span
+                  style="width:9px;height:9px;flex:none;border-radius:50%;border:2px solid #16323d;background:${this.syncDotColor(
+            sync.tone
+          )}"
+                ></span>
+                <span
+                  style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1"
+                >
+                  <span
+                    style="font-size:14px;font-weight:600;text-wrap:pretty"
+                    >${r.name}</span
+                  >
+                  <span
+                    style="font-family:'DM Mono',monospace;font-size:10.5px;opacity:.6"
+                    >${sub}</span
+                  >
+                </span>
+                ${on ? html`<span style="font-size:9px;opacity:.6">●</span>` : null}
+              </button>
+            `;
+    })}
+        </div>
+
+        <div
+          style="flex:none;border-top:2.5px solid #16323d;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:#fdf3d4"
+        >
+          ${st.rigRenaming
+        ? html`
+                <input
+                  .value=${st.rigDraft}
+                  autofocus
+                  style="width:100%;padding:8px 11px;border-radius:12px;border:2px solid #16323d;background:#fffbf0;font-family:inherit;font-size:14px;font-weight:600;color:#16323d;outline:none"
+                  @input=${(e: Event) =>
+            this.store.setRigDraft((e.target as HTMLInputElement).value)}
+                  @keydown=${(e: KeyboardEvent) => {
+            if (e.key === 'Enter') this.store.commitRenameRig();
+            else if (e.key === 'Escape') this.store.cancelRenameRig();
+          }}
+                  @blur=${() => this.store.commitRenameRig()}
+                />
+              `
+        : null}
+
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${!st.rigRenaming
+        ? html`
+                  <button
+                    style="padding:7px 11px;border-radius:14px;font-size:12.5px;font-weight:600;transition:background 140ms ease"
+                    @click=${() => this.store.startRenameRig()}
+                  >
+                    rename
+                  </button>
+                `
+        : null}
+            <button
+              style="padding:7px 11px;border-radius:14px;font-size:12.5px;font-weight:600;transition:background 140ms ease"
+              @click=${() => this.store.dupRig()}
+            >
+              duplicate
+            </button>
+            <button
+              style="padding:7px 11px;border-radius:14px;font-size:12.5px;font-weight:600;transition:background 140ms ease"
+              @click=${() => this.store.exportRig()}
+            >
+              export file
+            </button>
+            <button
+              style="padding:7px 11px;border-radius:14px;font-size:12.5px;font-weight:600;transition:background 140ms ease;${canDelete
+        ? st.rigDeleteConfirm
+          ? 'background:#ef7d5c;color:#fffbf0'
+          : 'color:#c44525'
+        : 'opacity:.35;pointer-events:none'}"
+              @click=${() => this.store.deleteRig()}
+            >
+              ${st.rigDeleteConfirm ? 'tap again to delete' : 'delete'}
+            </button>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button
+              style="flex:1;padding:9px 12px;border-radius:16px;background:#f7c948;border:2.5px solid #16323d;box-shadow:2px 2px 0 #16323d;font-size:13px;font-weight:600"
+              @click=${() => this.store.newRig()}
+            >
+              + new rig
+            </button>
+            <button
+              style="flex:1;padding:9px 12px;border-radius:16px;background:#fffbf0;border:2.5px solid #16323d;font-size:13px;font-weight:600"
+              @click=${() => this.rigFileRef.value?.click()}
+            >
+              import file
+            </button>
+          </div>
+
+          <input
+            ${ref(this.rigFileRef)}
+            type="file"
+            accept=".json"
+            style="display:none"
+            @change=${(e: Event) => {
+        const input = e.target as HTMLInputElement;
+        this.store.importRig(input.files?.[0]);
+        input.value = '';
+      }}
+          />
+        </div>
       </div>
     `;
   }

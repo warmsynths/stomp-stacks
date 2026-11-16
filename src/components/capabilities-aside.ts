@@ -76,6 +76,23 @@ export class CapabilitiesAside extends LitElement {
         font-size: 13px;
         line-height: 1;
       }
+      .dev-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 10px;
+      }
+      .dev-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        border: 2px solid #16323d;
+        transition: background 150ms ease;
+      }
       .list {
         flex: 1;
         min-height: 0;
@@ -157,12 +174,59 @@ export class CapabilitiesAside extends LitElement {
               </button>`
             : null}
         </div>
+        <div class="dev-pills">
+          ${[null, ...st.rig].map((id) => {
+            const dev = id ? HardwareRegistry.getDevice(id) : null;
+            const on = (st.libDev || null) === id;
+            const count = id
+              ? st.actions.filter((a) => a.steps.some((x) => x.device === id))
+                  .length
+              : st.actions.length;
+            const label = `${dev ? dev.name : 'all pedals'} · ${count}`;
+            const title = dev
+              ? `only actions that touch ${dev.name}`
+              : 'show every action';
+            return html`
+              <button
+                class="dev-pill"
+                title=${title}
+                style=${on
+                  ? 'background:#16323d;color:#fdf3d4'
+                  : 'background:#fffbf0'}
+                @click=${() => this.store.setLibDev(id)}
+              >
+                ${dev
+                  ? html`<span
+                      style="width:10px;height:10px;flex:none;border-radius:3px;border:2px solid ${on
+                        ? '#fdf3d4'
+                        : '#16323d'};background:${dev.accent}"
+                    ></span>`
+                  : null}
+                <span>${label}</span>
+              </button>
+            `;
+          })}
+        </div>
       </div>
 
       <div class="list">
-        ${CAPS.map((c) => {
-          const open = !!st.capOpen[c.id];
-          const acts = st.actions.filter((a) => a.caps.includes(c.id));
+        ${CAPS.filter(
+          (c) =>
+            !st.libDev ||
+            st.actions.some(
+              (a) =>
+                a.caps.includes(c.id) &&
+                a.steps.some((x) => x.device === st.libDev)
+            )
+        ).map((c) => {
+          const open = st.libDev
+            ? st.capOpen[c.id] !== false
+            : !!st.capOpen[c.id];
+          const acts = st.actions.filter(
+            (a) =>
+              a.caps.includes(c.id) &&
+              (!st.libDev || a.steps.some((x) => x.device === st.libDev))
+          );
           const lensed = st.lens === c.id;
           const boxStyle = `flex:none;border-radius:18px;border:2.5px solid #16323d;background:${
             lensed ? `${c.colour}55` : '#f7f1e3'

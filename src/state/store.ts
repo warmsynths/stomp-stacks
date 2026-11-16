@@ -21,10 +21,14 @@ import type {
   PeekState,
   PresetNaming,
   ReadPresetSlot,
+  RigSyncInfo,
+  SavedRigRecord,
+  SavedRigSnapshot,
   StompState,
   WiggleInfo,
   WireLogEntry,
 } from './types.js';
+import { DEFAULT_BG_BY } from '../components/pedal-bg.js';
 import { midiService, hex } from '../services/midi-service.js';
 import { parseAllScribblePresets } from '../compiler/adapters/scribble.js';
 import { describeStep } from '../compiler/adapters/mc3.js';
@@ -93,6 +97,7 @@ function initialState(controllerId: string): StompState {
     edPick: null,
     focus: null,
     libOpen: typeof window !== 'undefined' ? window.innerWidth >= 1100 : true,
+    libDev: null,
     capOpen: {},
     lens: null,
     actions: SEED_ACTIONS.map((a) => ({ ...a, caps: [...a.caps], steps: a.steps.map((s) => ({ ...s })) })),
@@ -114,7 +119,43 @@ function initialState(controllerId: string): StompState {
     lit: null,
     jumpOpen: false,
     scribbleFirmware: { version: '2.0.0', major: 'v2', detectedFrom: 'default' },
+    rigs: [],
+    rigId: null,
+    rigMenuOpen: false,
+    rigRenaming: false,
+    rigDraft: '',
+    rigDeleteConfirm: false,
+    bgBy: { ...DEFAULT_BG_BY },
   };
+}
+
+const RIG_STORE = 'stompstacks.rigs.v1';
+const BG_STORE = 'stompstacks.bgBy';
+const RIG_KEYS: Array<keyof SavedRigSnapshot> = [
+  'banks',
+  'controllerId',
+  'brainId',
+  'channels',
+  'rig',
+  'naming',
+  'actions',
+  'pedalSets',
+  'offsets',
+];
+
+function snapState(s: StompState): SavedRigSnapshot {
+  const o = {
+    banks: s.banks,
+    controllerId: s.controllerId,
+    brainId: s.brainId,
+    channels: s.channels,
+    rig: s.rig,
+    naming: s.naming,
+    actions: s.actions,
+    pedalSets: s.pedalSets,
+    offsets: s.offsets,
+  };
+  return JSON.parse(JSON.stringify(o)) as SavedRigSnapshot;
 }
 
 /**
@@ -123,9 +164,86 @@ function initialState(controllerId: string): StompState {
  */
 export class StompStore extends EventTarget {
   state: StompState = initialState('chocolate');
+  private _loadingRig = false;
+
+  constructor() {
+    super();
+    this.hydratePersistedState();
+  }
+
+  private hydratePersistedState() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const rawBg = localStorage.getItem(BG_STORE);
+      if (rawBg) {
+        const parsedBg = JSON.parse(rawBg) as Record<string, string>;
+        if (parsedBg && typeof parsedBg === 'object') {
+          this.state = {
+            ...this.state,
+            bgBy: { ...this.state.bgBy, ...parsedBg },
+          };
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    try {
+      const rawRigs = localStorage.getItem(RIG_STORE);
+      const parsed = rawRigs
+        ? (JSON.parse(rawRigs) as { rigs?: SavedRigRecord[]; current?: string })
+        : null;
+      if (parsed && Array.isArray(parsed.rigs) && parsed.rigs.length > 0) {
+        const cur =
+          parsed.rigs.find((r) => r.id === parsed.current) || parsed.rigs[0];
+        this._loadingRig = true;
+        this.applyLoadedRig(cur, parsed.rigs, { skipSetupClear: false });
+        this._loadingRig = false;
+        return;
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    const first: SavedRigRecord = {
+      id: `r${Date.now()}`,
+      name: 'my first rig',
+      data: snapState(this.state),
+      updated: Date.now(),
+      sent: null,
+      sentAt: null,
+    };
+    this.state = { ...this.state, rigs: [first], rigId: first.id };
+    this.writeRigStore(this.state.rigs, first.id);
+  }
+
+  private writeRigStore(rigs: SavedRigRecord[], id: string | null) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(RIG_STORE, JSON.stringify({ rigs, current: id }));
+    } catch {
+      // ignore storage quota errors
+    }
+  }
 
   private set(patch: Partial<StompState>) {
-    this.state = { ...this.state, ...patch };
+    const prev = this.state;
+    let next: StompState = { ...prev, ...patch };
+    if (!this._loadingRig && next.rigId) {
+      const changed = RIG_KEYS.some(
+        (k) => k in patch && next[k] !== prev[k]
+      );
+      if (changed) {
+        const snap = snapState(next);
+        const now = Date.now();
+        const rigs = next.rigs.map((r) =>
+          r.id === next.rigId ? { ...r, data: snap, updated: now } : r
+        );
+        next = { ...next, rigs };
+        this.writeRigStore(rigs, next.rigId);
+      }
+    }
+    this.state = next;
     this.dispatchEvent(new Event('change'));
   }
 
@@ -256,7 +374,15 @@ export class StompStore extends EventTarget {
     if (this.state.rig.length <= 1) return;
     const rig = this.state.rig.filter((x) => x !== id);
     const browseDevice = this.state.browseDevice === id ? rig[0] : this.state.browseDevice;
-    this.set({ rig, browseDevice, channelPickerOpen: false, popoverControlId: null, confirmRemovePedal: null });
+    const libDev = this.state.libDev === id ? null : this.state.libDev;
+    this.set({
+      rig,
+      browseDevice,
+      libDev,
+      channelPickerOpen: false,
+      popoverControlId: null,
+      confirmRemovePedal: null,
+    });
   }
 
   toggleRigPedal(id: string) {
@@ -383,6 +509,11 @@ export class StompStore extends EventTarget {
       const defaultVal =
         control.values && control.values.length > 0 ? control.values[0].value : control.type === 'knob' ? 64 : null;
       this.addStep(control.id, defaultVal);
+      return;
+    }
+
+    if (control.type === 'foot') {
+      this.addStep(control.id, null);
       return;
     }
 
@@ -1045,12 +1176,19 @@ export class StompStore extends EventTarget {
     this.set({ libOpen });
   }
 
+  setLibDev(libDev: string | null) {
+    this.set({ libDev });
+  }
+
   toggleLibOpen() {
     this.set({ libOpen: !this.state.libOpen });
   }
 
   toggleCapOpen(cap: string) {
-    this.set({ capOpen: { ...this.state.capOpen, [cap]: !this.state.capOpen[cap] } });
+    const isOpen = this.state.libDev
+      ? this.state.capOpen[cap] !== false
+      : !!this.state.capOpen[cap];
+    this.set({ capOpen: { ...this.state.capOpen, [cap]: !isOpen } });
   }
 
   setLens(lens: CapabilityId | null) {
@@ -2016,6 +2154,272 @@ export class StompStore extends EventTarget {
 
   clearLog() {
     this.set({ log: [] });
+  }
+
+  // --- Rig Persistence & Pedal Background Animations ---
+
+  private applyLoadedRig(
+    rec: SavedRigRecord,
+    rigs: SavedRigRecord[],
+    opts: { skipSetupClear?: boolean } = {}
+  ) {
+    const d = rec.data;
+    const ctrl = CONTROLLERS[d.controllerId] || CONTROLLERS.chocolate;
+    const patch: Partial<StompState> = {
+      ...JSON.parse(JSON.stringify(d)),
+      rigs,
+      rigId: rec.id,
+      bank: 0,
+      selectedKey: ctrl.keys[0],
+      action: 'press',
+      browseDevice: d.rig[0] || DEVICE_ORDER[0],
+      popoverControlId: null,
+      actEdit: null,
+      setsOpen: null,
+      rigMenuOpen: false,
+      rigRenaming: false,
+      rigDeleteConfirm: false,
+      ...(opts.skipSetupClear ? {} : { setupStep: null }),
+    };
+    this._loadingRig = true;
+    this.set(patch);
+    this._loadingRig = false;
+    this.writeRigStore(rigs, rec.id);
+  }
+
+  private saveCurrentRigSnapshot(): SavedRigRecord[] {
+    const s = this.state;
+    if (!s.rigId) return s.rigs;
+    const snap = snapState(s);
+    const now = Date.now();
+    const rigs = s.rigs.map((r) =>
+      r.id === s.rigId ? { ...r, data: snap, updated: now } : r
+    );
+    this.writeRigStore(rigs, s.rigId);
+    return rigs;
+  }
+
+  currentRig(): SavedRigRecord | undefined {
+    return this.state.rigs.find((r) => r.id === this.state.rigId);
+  }
+
+  syncInfo(rec: SavedRigRecord, live?: SavedRigSnapshot): RigSyncInfo {
+    const d = live || rec.data;
+    if (!rec.sent) return { n: -1, label: 'not sent yet', tone: 'none' };
+    const a = d.banks || [];
+    const b = rec.sent.banks || [];
+    let n = 0;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const x = a[i] || {};
+      const y = b[i] || {};
+      const keys = new Set([...Object.keys(x), ...Object.keys(y)]);
+      for (const k of keys) {
+        if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) n++;
+      }
+    }
+    const other = (
+      ['controllerId', 'brainId', 'channels', 'rig', 'naming', 'actions', 'pedalSets'] as const
+    ).some((k) => JSON.stringify(d[k]) !== JSON.stringify(rec.sent![k]));
+    if (n > 0) {
+      return {
+        n,
+        label: `${n} ${n === 1 ? 'switch' : 'switches'} not sent`,
+        tone: 'dirty',
+      };
+    }
+    if (other) return { n: 0, label: 'settings not sent', tone: 'dirty' };
+    return { n: 0, label: 'on the controller', tone: 'ok' };
+  }
+
+  toggleRigMenu() {
+    this.set({
+      rigMenuOpen: !this.state.rigMenuOpen,
+      rigRenaming: false,
+      rigDeleteConfirm: false,
+    });
+  }
+
+  closeRigMenu() {
+    if (!this.state.rigMenuOpen) return;
+    this.set({
+      rigMenuOpen: false,
+      rigRenaming: false,
+      rigDeleteConfirm: false,
+    });
+  }
+
+  switchRig(id: string) {
+    if (id === this.state.rigId) {
+      this.set({ rigMenuOpen: false, rigRenaming: false, rigDeleteConfirm: false });
+      return;
+    }
+    const rigs = this.saveCurrentRigSnapshot();
+    const target = rigs.find((r) => r.id === id);
+    if (!target) return;
+    this.applyLoadedRig(target, rigs);
+  }
+
+  newRig() {
+    const rigs = this.saveCurrentRigSnapshot();
+    const s = this.state;
+    const data = snapState(s);
+    data.banks = MacroStackModel.createBanks(s.controllerId);
+    data.naming = {};
+    const rec: SavedRigRecord = {
+      id: `r${Date.now()}`,
+      name: `untitled rig ${rigs.length + 1}`,
+      data,
+      updated: Date.now(),
+      sent: null,
+      sentAt: null,
+    };
+    this.applyLoadedRig(rec, [...rigs, rec], { skipSetupClear: true });
+    this.set({ setupStep: 1 });
+  }
+
+  dupRig() {
+    const rigs = this.saveCurrentRigSnapshot();
+    const cur = rigs.find((r) => r.id === this.state.rigId);
+    if (!cur) return;
+    const rec: SavedRigRecord = {
+      id: `r${Date.now()}`,
+      name: `${cur.name} copy`,
+      data: JSON.parse(JSON.stringify(cur.data)) as SavedRigSnapshot,
+      updated: Date.now(),
+      sent: null,
+      sentAt: null,
+    };
+    this.applyLoadedRig(rec, [...rigs, rec]);
+  }
+
+  deleteRig() {
+    const s = this.state;
+    if (s.rigs.length < 2) return;
+    if (!s.rigDeleteConfirm) {
+      this.set({ rigDeleteConfirm: true });
+      return;
+    }
+    const rigs = s.rigs.filter((r) => r.id !== s.rigId);
+    this.applyLoadedRig(rigs[0], rigs);
+  }
+
+  startRenameRig() {
+    const cur = this.currentRig();
+    this.set({
+      rigRenaming: true,
+      rigDraft: cur ? cur.name : '',
+      rigDeleteConfirm: false,
+    });
+  }
+
+  setRigDraft(draft: string) {
+    this.set({ rigDraft: draft });
+  }
+
+  commitRenameRig() {
+    if (!this.state.rigRenaming) return;
+    const name = this.state.rigDraft.trim();
+    const rigs = this.state.rigs.map((r) =>
+      r.id === this.state.rigId && name ? { ...r, name } : r
+    );
+    this.set({ rigs, rigRenaming: false });
+    this.writeRigStore(rigs, this.state.rigId);
+  }
+
+  cancelRenameRig() {
+    this.set({ rigRenaming: false });
+  }
+
+  exportRig() {
+    const rigs = this.saveCurrentRigSnapshot();
+    const cur = rigs.find((r) => r.id === this.state.rigId);
+    if (!cur) return;
+    const payload = JSON.stringify(
+      { app: 'stomp stacks', version: 1, name: cur.name, data: cur.data },
+      null,
+      2
+    );
+    const filename = `${cur.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.stomp.json`;
+    const blob = new Blob([payload], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    this.set({ rigs, rigMenuOpen: false });
+    this.pushLog({ text: 'rig exported', sub: filename, tone: 'ok' });
+  }
+
+  async importRig(file: File | undefined) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const raw = JSON.parse(text) as {
+        name?: string;
+        data?: Record<string, any>;
+      };
+      const d = raw?.data;
+      const controllerId = d?.controllerId || d?.controller;
+      if (!d || !Array.isArray(d.banks) || !controllerId || !CONTROLLERS[controllerId]) {
+        throw new Error('bad');
+      }
+      const normalized: SavedRigSnapshot = {
+        banks: d.banks,
+        controllerId,
+        brainId: d.brainId || d.brain || 'scribble',
+        channels: d.channels || { blooper: 1, mood: 2, elcap: 3 },
+        rig: Array.isArray(d.rig) ? d.rig : ['blooper', 'mood', 'elcap'],
+        naming: d.naming || {},
+        actions: Array.isArray(d.actions) ? d.actions : this.state.actions,
+        pedalSets: Array.isArray(d.pedalSets)
+          ? d.pedalSets
+          : Array.isArray(d.moodSets)
+            ? d.moodSets
+            : this.state.pedalSets,
+        offsets: d.offsets || {},
+      };
+      const rigs = this.saveCurrentRigSnapshot();
+      const rec: SavedRigRecord = {
+        id: `r${Date.now()}`,
+        name: raw.name || file.name.replace(/\..*$/, ''),
+        data: normalized,
+        updated: Date.now(),
+        sent: null,
+        sentAt: null,
+      };
+      this.applyLoadedRig(rec, [...rigs, rec]);
+      this.pushLog({ text: 'rig imported', sub: rec.name, tone: 'ok' });
+    } catch {
+      this.pushLog({
+        text: "couldn't read that file",
+        sub: `${file.name} isn't a stomp stacks rig`,
+        tone: 'warn',
+      });
+    }
+  }
+
+  markRigSent() {
+    const s = this.state;
+    if (!s.rigId) return;
+    const data = snapState(s);
+    const now = Date.now();
+    const rigs = s.rigs.map((r) =>
+      r.id === s.rigId ? { ...r, data, updated: now, sent: data, sentAt: now } : r
+    );
+    this.set({ rigs });
+    this.writeRigStore(rigs, s.rigId);
+  }
+
+  setPedalBg(deviceId: string, style: string) {
+    const bgBy = { ...this.state.bgBy, [deviceId]: style };
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(BG_STORE, JSON.stringify(bgBy));
+      } catch {
+        // ignore storage errors
+      }
+    }
+    this.set({ bgBy, browseDevice: deviceId });
   }
 }
 

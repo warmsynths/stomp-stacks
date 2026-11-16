@@ -285,6 +285,7 @@ export class CompileModal extends LitElement {
     } else {
       downloadText(compilation.exportFile.filename, compilation.exportFile.content);
     }
+    this.store.markRigSent();
   }
 
   render() {
@@ -314,7 +315,7 @@ export class CompileModal extends LitElement {
           <div class="body">
             <div class="targets-sidebar">
               ${TARGETS.map(
-                (t) => html`
+      (t) => html`
                   <button
                     class="target-btn"
                     ?active=${st.targetId === t.id}
@@ -324,19 +325,19 @@ export class CompileModal extends LitElement {
                     <span class="target-sub">${t.sub}</span>
                   </button>
                 `,
-              )}
+    )}
             </div>
             <div class="main-content">
               ${st.targetId === 'scribble'
-                ? html`
+        ? html`
                     <div class="fw-bar">
                       <div class="fw-meta">
                         <span class="fw-dot"></span>
                         <span class="fw-title">firmware target:</span>
                         <span class="fw-badge">${st.scribbleFirmware?.version || '2.0.0'}</span>
                         ${st.scribbleFirmware?.detectedFrom && st.scribbleFirmware.detectedFrom !== 'default'
-                          ? html`<span class="fw-detected">(${st.scribbleFirmware.detectedFrom === 'device' ? 'live device' : 'imported file'})</span>`
-                          : null}
+            ? html`<span class="fw-detected">(${st.scribbleFirmware.detectedFrom === 'device' ? 'live device' : 'imported file'})</span>`
+            : null}
                       </div>
                       <div class="fw-toggle-group">
                         <button
@@ -358,21 +359,21 @@ export class CompileModal extends LitElement {
                       </div>
                     </div>
                   `
-                : null}
+        : null}
               <div class="preview-area">
                 ${lines.map(
-                  (l) => html`<div style=${l.muted ? 'white-space:pre;opacity:.42' : l.bold ? 'white-space:pre;font-weight:600' : 'white-space:pre;opacity:.85'}>${l.text}</div>`,
-                )}
+          (l) => html`<div style=${l.muted ? 'white-space:pre;opacity:.42' : l.bold ? 'white-space:pre;font-weight:600' : 'white-space:pre;opacity:.85'}>${l.text}</div>`,
+        )}
               </div>
               <div class="issues-box">
                 ${issues.map(
-                  (i) => html`
+          (i) => html`
                     <div class="issue-row" style=${i.type === 'ok' ? 'opacity:.6' : ''}>
                       <span class="issue-dot" style="background:${i.type === 'ok' ? '#5bb85b' : 'var(--mustard)'}"></span>
                       <span style="flex:1;text-wrap:pretty">${i.text}</span>
                     </div>
                   `,
-                )}
+        )}
               </div>
             </div>
           </div>
@@ -380,11 +381,18 @@ export class CompileModal extends LitElement {
             <span class="target-note">
               ${currentTargetDef.note}
               ${st.targetId === 'scribble'
-                ? ` · ${st.scribbleFirmware?.major === 'v2' ? 'v2.0+ schema' : 'v1.0.x schema'}`
-                : ''}
+        ? ` · ${st.scribbleFirmware?.major === 'v2' ? 'v2.0+ schema' : 'v1.0.x schema'}`
+        : ''}
             </span>
             <span class="spacer"></span>
             <button class="btn-close" @click=${() => this.store.closeCompile()}>close</button>
+            <button
+              class="btn-close"
+              title="mark current rig as loaded on the controller"
+              @click=${() => this.store.markRigSent()}
+            >
+              mark as sent
+            </button>
             <button class="btn-download" @click=${() => this.handleDownload()}>
               grab ${currentTargetDef.label}
             </button>

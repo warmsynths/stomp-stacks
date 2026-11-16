@@ -1,11 +1,13 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { createRef, ref } from 'lit/directives/ref.js';
 import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
 import { type Device, type DeviceControl } from '../data/devices.js';
 import { HardwareRegistry } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { MacroStep } from '../state/types.js';
+import { drawPedalBg } from './pedal-bg.js';
 
 @customElement('pedal-canvas')
 export class PedalCanvas extends LitElement {
@@ -31,10 +33,102 @@ export class PedalCanvas extends LitElement {
   @property({ type: Boolean, reflect: true }) desktop = false;
 
   private storeController!: StoreController;
+  private bgCanvasRef = createRef<HTMLCanvasElement>();
+  private stageRef = createRef<HTMLDivElement>();
+  private rafId: number | null = null;
+  private bgLast = 0;
+  private bgPtr: { x: number; y: number } | null = null;
+  private bgKick = 0;
+  private bgLit: { device: string; control: string } | null = null;
+  private bgStores: Record<string, Record<string, any>> = {};
+  private reduceMotion = false;
 
   connectedCallback() {
     super.connectedCallback();
     this.storeController ??= new StoreController(this, this.store);
+    this.reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const tick = (now: number) => {
+      this.drawBgFrame(now);
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  private drawBgFrame(now: number) {
+    const cv = this.bgCanvasRef.value;
+    const stg = this.stageRef.value;
+    if (!cv || !stg || !this.store) return;
+
+    const dt = Math.min(50, now - (this.bgLast || now));
+    this.bgLast = now;
+
+    const W = cv.clientWidth;
+    const H = cv.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    if (
+      cv.width !== Math.round(W * dpr) ||
+      cv.height !== Math.round(H * dpr)
+    ) {
+      cv.width = Math.round(W * dpr);
+      cv.height = Math.round(H * dpr);
+    }
+
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+
+    const st = this.store.state;
+    const style = (st.bgBy || {})[st.browseDevice];
+    if (!W || !style || style === 'off') return;
+
+    let hit = false;
+    if (st.lit && st.lit !== this.bgLit && st.lit.device === st.browseDevice) {
+      this.bgKick = 1;
+      hit = true;
+    }
+    this.bgLit = st.lit;
+    this.bgKick *= 0.96;
+
+    const key = `${st.browseDevice}:${style}`;
+    const S = (this.bgStores[key] ??= {});
+    const P = {
+      x: stg.offsetLeft,
+      y: stg.offsetTop,
+      w: stg.offsetWidth,
+      h: stg.offsetHeight,
+      cx: stg.offsetLeft + stg.offsetWidth / 2,
+      cy: stg.offsetTop + stg.offsetHeight / 2,
+    };
+
+    try {
+      drawPedalBg(style, ctx, {
+        W,
+        H,
+        now,
+        dt: this.reduceMotion ? 0 : dt,
+        P,
+        p: this.bgPtr,
+        k: this.bgKick,
+        hit,
+        S,
+        reduce: this.reduceMotion,
+        acc: HardwareRegistry.getDevice(st.browseDevice)?.accent,
+      });
+    } catch {
+      ctx.globalAlpha = 1;
+    }
   }
 
   render() {
@@ -47,29 +141,38 @@ export class PedalCanvas extends LitElement {
 
     const primaryControls = device.controls.filter((c) => !c.sub);
 
-    const canvasStyle = `${
-      this.phone ? 'flex:none' : 'flex:1;min-height:0'
-    };width:100%;display:flex;align-items:${
-      this.phone ? 'flex-start' : 'center'
-    };justify-content:center;overflow:${
-      this.phone ? 'visible' : 'hidden'
-    };padding:${this.desktop ? '0 26px 20px' : '8px 14px 14px'}`;
+    const canvasStyle = `position:relative;${this.phone ? 'flex:none' : 'flex:1;min-height:0'
+      };width:100%;display:flex;align-items:${this.phone ? 'flex-start' : 'center'
+      };justify-content:center;overflow:${this.phone ? 'visible' : 'hidden'
+      };padding:${this.desktop ? '0 26px 20px' : '8px 14px 14px'}`;
 
-    const stageStyle = `position:relative;flex:none;container-type:size;filter:drop-shadow(5px 5px 0 #16323d);aspect-ratio:${
-      drawn ? '344/426' : `${device.pw}/${device.ph}`
-    };${
-      this.phone
+    const stageStyle = `position:relative;flex:none;container-type:size;filter:drop-shadow(5px 5px 0 #16323d);aspect-ratio:${drawn ? '344/426' : `${device.pw}/${device.ph}`
+      };${this.phone
         ? `width:min(100%,${drawn ? 250 : 260}px);margin:0 auto;height:auto`
-        : `height:100%;width:auto;max-width:100%;max-height:${
-            drawn ? '420px' : '600px'
-          }`
-    }`;
+        : `height:100%;width:auto;max-width:100%;max-height:${drawn ? '420px' : '600px'
+        }`
+      }`;
 
     return html`
-      <div style=${canvasStyle}>
-        <div style=${stageStyle}>
+      <div
+        style=${canvasStyle}
+        @pointermove=${(e: PointerEvent) => {
+        const el = e.currentTarget as HTMLElement;
+        const r = el.getBoundingClientRect();
+        const f = el.clientWidth / (r.width || 1);
+        this.bgPtr = { x: (e.clientX - r.left) * f, y: (e.clientY - r.top) * f };
+      }}
+        @pointerleave=${() => {
+        this.bgPtr = null;
+      }}
+      >
+        <canvas
+          ${ref(this.bgCanvasRef)}
+          style="position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none"
+        ></canvas>
+        <div ${ref(this.stageRef)} style=${stageStyle}>
           ${!drawn
-            ? html`
+        ? html`
                 <div style="position:absolute;inset:0">
                   <img
                     src=${device.photo}
@@ -78,7 +181,7 @@ export class PedalCanvas extends LitElement {
                   />
                 </div>
               `
-            : html`
+        : html`
                 <div
                   style="position:absolute;inset:0;border-radius:20px;background:${device.body};border:2.5px solid #16323d"
                 ></div>
@@ -89,8 +192,8 @@ export class PedalCanvas extends LitElement {
                 </div>
               `}
           ${primaryControls.map((c) =>
-            this.renderControl(c, device, drawn, faceList, build, ea)
-          )}
+          this.renderControl(c, device, drawn, faceList, build, ea)
+        )}
         </div>
       </div>
     `;
@@ -233,24 +336,20 @@ export class PedalCanvas extends LitElement {
 
     let face = '';
     if (onPhoto) {
-      face = `display:block;width:100%;height:100%;border-radius:50%;border:2.5px ${
-        isOpen || used ? 'solid' : 'dashed'
-      } #16323d;background:${
-        isOpen
+      face = `display:block;width:100%;height:100%;border-radius:50%;border:2.5px ${isOpen || used ? 'solid' : 'dashed'
+        } #16323d;background:${isOpen
           ? '#f7c948aa'
           : used
             ? '#f7c94855'
             : 'rgba(255,251,240,.28)'
-      };box-shadow:${
-        isOpen ? '0 0 0 4px #f7c94866' : 'none'
-      };transition:background 160ms ease,box-shadow 160ms cubic-bezier(.23,1,.32,1)`;
+        };box-shadow:${isOpen ? '0 0 0 4px #f7c94866' : 'none'
+        };transition:background 160ms ease,box-shadow 160ms cubic-bezier(.23,1,.32,1)`;
     } else if (c.type === 'toggle') {
       face =
         'display:block;width:100%;height:100%;border-radius:7px;background:#16323d;border:2.5px solid #16323d';
     } else {
-      face = `display:block;width:100%;height:100%;border-radius:50%;background:#fffbf0;border:2.5px solid #16323d;box-shadow:${
-        isOpen ? '0 0 0 4px #f7c94866' : '2px 2px 0 #16323d'
-      };transition:box-shadow 160ms cubic-bezier(.23,1,.32,1)`;
+      face = `display:block;width:100%;height:100%;border-radius:50%;background:#fffbf0;border:2.5px solid #16323d;box-shadow:${isOpen ? '0 0 0 4px #f7c94866' : '2px 2px 0 #16323d'
+        };transition:box-shadow 160ms cubic-bezier(.23,1,.32,1)`;
     }
 
     const lensColor = st.lens ? this.store.capOf(st.lens)?.colour : null;
@@ -264,53 +363,42 @@ export class PedalCanvas extends LitElement {
           ? `;box-shadow:0 0 0 5px ${lensColor}`
           : '');
 
-    const wrapStyle = `position:absolute;left:${cx}%;top:${cy}%;${box};transform:translate(-50%,-50%);padding:0;display:flex;align-items:center;justify-content:center;${
-      this.phone ? 'min-width:44px;min-height:44px;' : ''
-    }z-index:${isOpen ? 12 : isLit ? 11 : 6}${
-      lensDim ? ';opacity:.28' : ''
-    };transition:opacity 200ms ease`;
+    const wrapStyle = `position:absolute;left:${cx}%;top:${cy}%;${box};transform:translate(-50%,-50%);padding:0;display:flex;align-items:center;justify-content:center;${this.phone ? 'min-width:44px;min-height:44px;' : ''
+      }z-index:${isOpen ? 12 : isLit ? 11 : 6}${lensDim ? ';opacity:.28' : ''
+      };transition:opacity 200ms ease`;
 
     const arcStyle = hasKv
-      ? `position:absolute;inset:-6px;border-radius:50%;pointer-events:none;background:${
-          wig
-            ? `conic-gradient(from -135deg,rgba(255,251,240,.55) 0deg ${
-                A(wig.lo) + 135
-              }deg,#8fd0e6 ${A(wig.lo) + 135}deg ${
-                A(wig.hi) + 135
-              }deg,rgba(255,251,240,.55) ${
-                A(wig.hi) + 135
-              }deg 270deg,transparent 270deg)`
-            : `conic-gradient(from -135deg,#f7c948 0deg ${
-                ang + 135
-              }deg,rgba(255,251,240,.55) ${
-                ang + 135
-              }deg 270deg,transparent 270deg)`
-        };-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px))`
+      ? `position:absolute;inset:-6px;border-radius:50%;pointer-events:none;background:${wig
+        ? `conic-gradient(from -135deg,rgba(255,251,240,.55) 0deg ${A(wig.lo) + 135
+        }deg,#8fd0e6 ${A(wig.lo) + 135}deg ${A(wig.hi) + 135
+        }deg,rgba(255,251,240,.55) ${A(wig.hi) + 135
+        }deg 270deg,transparent 270deg)`
+        : `conic-gradient(from -135deg,#f7c948 0deg ${ang + 135
+        }deg,rgba(255,251,240,.55) ${ang + 135
+        }deg 270deg,transparent 270deg)`
+      };-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px))`
       : 'display:none';
 
     const tickStyle = !hasKv
       ? 'display:none'
       : wig
         ? `position:absolute;inset:0;pointer-events:none;--a0:${A(
-            wig.from
-          )}deg;--a1:${A(wig.to)}deg;transform:rotate(${A(
-            wig.from
-          )}deg);animation:${
-            wig.bounce
-              ? `kwig ${wig.dur}s ease-in-out infinite alternate`
-              : `kglide ${wig.dur}s cubic-bezier(.23,1,.32,1) infinite`
-          }`
+          wig.from
+        )}deg;--a1:${A(wig.to)}deg;transform:rotate(${A(
+          wig.from
+        )}deg);animation:${wig.bounce
+          ? `kwig ${wig.dur}s ease-in-out infinite alternate`
+          : `kglide ${wig.dur}s cubic-bezier(.23,1,.32,1) infinite`
+        }`
         : `position:absolute;inset:0;pointer-events:none;transform:rotate(${ang}deg);transition:transform 380ms cubic-bezier(.23,1,.32,1)`;
 
     const labelStyle = onPhoto
-      ? `position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#f7c948;border:2px solid #16323d;color:#16323d;pointer-events:none;opacity:${
-          isOpen || (used && !obvious) ? '1' : '0'
-        }`
-      : `position:absolute;left:50%;${
-          c.type === 'foot'
-            ? 'bottom:calc(100% + 6px);'
-            : 'top:calc(100% + 5px);'
-        }transform:translateX(-50%);white-space:nowrap;font-size:clamp(8px,3.2cqw,11px);font-weight:500;color:#16323d;opacity:.75;pointer-events:none`;
+      ? `position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#f7c948;border:2px solid #16323d;color:#16323d;pointer-events:none;opacity:${isOpen || (used && !obvious) ? '1' : '0'
+      }`
+      : `position:absolute;left:50%;${c.type === 'foot'
+        ? 'bottom:calc(100% + 6px);'
+        : 'top:calc(100% + 5px);'
+      }transform:translateX(-50%);white-space:nowrap;font-size:clamp(8px,3.2cqw,11px);font-weight:500;color:#16323d;opacity:.75;pointer-events:none`;
 
     const showBadge = used || moves;
     const badgeText = hits.join(',') + (moves ? (used ? ' ~' : '~') : '');
