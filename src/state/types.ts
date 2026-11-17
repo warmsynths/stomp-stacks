@@ -156,6 +156,7 @@ export interface PeekState {
   device: string;
   control: string;
   value: number | null;
+  keys?: string[];
 }
 
 export interface StompState {
@@ -265,6 +266,26 @@ export interface StompState {
   rigDeleteConfirm: boolean;
   /** Per-pedal background animation style IDs (or 'off'). */
   bgBy: Record<string, string>;
+
+  // --- v4 State Fields ---
+  /** Back view ("dip switches") open state for pedals with dev.back = true. */
+  backOpen: boolean;
+  /** Sounds panel search query text. */
+  soundQuery: string;
+  /** Sounds panel active tag IDs. */
+  soundTags: string[];
+  /** Number of ranked sound results currently shown (increments by 5). */
+  soundLimit: number;
+  /** Whether the Sounds panel is browsing all capabilities instead of suggestions. */
+  libBrowse: boolean;
+  /** Active mobile tab ('rig' | 'pedal' | 'stack' | 'sounds'). */
+  mobileTab: 'rig' | 'pedal' | 'stack' | 'sounds';
+  /** Guided tour step index (0..3) or null when inactive. */
+  tourStep: number | null;
+  /** Whether the guided tour has been completed or skipped. */
+  tourDone: boolean;
+  /** Whether the guided tour card is faded to an outline while user interacts. */
+  tourFade: boolean;
 }
 
 export interface SavedRigSnapshot {

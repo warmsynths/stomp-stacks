@@ -3,7 +3,7 @@ import { DEVICES, DEVICE_ORDER, valueOptionsFor, KNOB_VALUES } from '../devices.
 
 describe('Device Dictionary Data', () => {
   it('contains all required devices in DEVICE_ORDER', () => {
-    expect(DEVICE_ORDER).toEqual(['blooper', 'mood', 'elcap', 'genloss']);
+    expect(DEVICE_ORDER).toEqual(['blooper', 'mood', 'elcap', 'genloss', 'brothers']);
     DEVICE_ORDER.forEach((id) => {
       expect(DEVICES[id]).toBeDefined();
       expect(DEVICES[id].id).toBe(id);

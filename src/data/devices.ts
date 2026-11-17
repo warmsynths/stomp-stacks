@@ -2,7 +2,7 @@
 // Each device owns a default MIDI channel and explicit CC numbers per control from official pedal manuals;
 // see src/compiler/midi.ts for how these turn into statusByte/dataByte1/dataByte2.
 
-export type ControlType = 'knob' | 'toggle' | 'foot';
+export type ControlType = 'knob' | 'toggle' | 'foot' | 'dip';
 
 export interface ControlValueOption {
   /** Human label shown in the value popover, e.g. "9 o'clock", "centre". */
@@ -48,15 +48,17 @@ export interface DeviceControl {
   pc?: boolean;
   /** True for secondary MIDI-only parameters without a dedicated physical faceplate knob/switch. */
   sub?: boolean;
+  /** Back view group ('L' = control dips, 'R' = customize dips, 'K' = MIDI-only knobs). */
+  back?: 'L' | 'R' | 'K';
   /** Optional hardware notes or parameter behavior details. */
   notes?: string;
   /** Drawn-faceplate position, percent of stage. */
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   /** Photo-faceplate hotspot position & size, percent of stage. */
-  px: number;
-  py: number;
-  ps: number;
+  px?: number;
+  py?: number;
+  ps?: number;
   values?: ControlValueOption[];
 }
 
@@ -72,6 +74,8 @@ export interface Device {
   midiChannel: number;
   /** Base CC fallback number. */
   base: number;
+  /** True when this pedal has a back view (dip switches + MIDI-only knobs). */
+  back?: boolean;
   /** Program change offset (e.g. 0 for zero-based pedals like Blooper). */
   pcOffset?: number;
   photo: string;
@@ -101,6 +105,11 @@ const TRI_123: ControlValueOption[] = [
   { label: '1', value: 1 },
   { label: '2', value: 2 },
   { label: '3', value: 3 },
+];
+
+const ONOFF_VALUES: ControlValueOption[] = [
+  { label: 'off', value: 0 },
+  { label: 'on', value: 127 },
 ];
 
 export const DEVICES: Record<string, Device> = {
@@ -799,9 +808,173 @@ export const DEVICES: Record<string, Device> = {
       },
     ],
   },
+  brothers: {
+    id: 'brothers',
+    name: 'brothers AM',
+    faceName: 'brothers AM',
+    sub: 'dual drive',
+    accent: '#e0574a',
+    body: '#2b2b2b',
+    ink: '#f4ede0',
+    midiChannel: 2,
+    base: 14,
+    back: true,
+    photo: 'assets/brothers-face.png',
+    pw: 508,
+    ph: 950,
+    controls: [
+      { id: 'gain2', short: 'gain 2', label: 'Gain 2', type: 'knob', cc: 14, x: 22, y: 12, px: 17.3, py: 8.4, ps: 21.6 },
+      { id: 'vol2', short: 'vol 2', label: 'Volume 2', type: 'knob', cc: 15, x: 50, y: 12, px: 49.6, py: 8.4, ps: 21.6 },
+      { id: 'gain1', short: 'gain 1', label: 'Gain 1', type: 'knob', cc: 16, x: 78, y: 12, px: 82.5, py: 8.4, ps: 21.6 },
+      { id: 'tone2', short: 'tone 2', label: 'Tone 2', type: 'knob', cc: 17, x: 22, y: 33, px: 17.3, py: 29.5, ps: 21.6 },
+      { id: 'vol1', short: 'vol 1', label: 'Volume 1', type: 'knob', cc: 18, x: 50, y: 33, px: 49.6, py: 29.5, ps: 21.6 },
+      { id: 'tone1', short: 'tone 1', label: 'Tone 1', type: 'knob', cc: 19, x: 78, y: 33, px: 82.5, py: 29.5, ps: 21.6 },
+      {
+        id: 'type2',
+        short: 'boost od dist',
+        label: 'Gain 2 type',
+        type: 'toggle',
+        cc: 21,
+        x: 22,
+        y: 52,
+        px: 17.5,
+        py: 46.1,
+        ps: 12,
+        values: [
+          { label: 'boost', value: 0 },
+          { label: 'overdrive', value: 2 },
+          { label: 'distortion', value: 3 },
+        ],
+      },
+      {
+        id: 'treble',
+        short: 'treble boost',
+        label: 'Treble boost',
+        type: 'toggle',
+        cc: 22,
+        x: 50,
+        y: 52,
+        px: 50,
+        py: 46.1,
+        ps: 12,
+        values: [
+          { label: 'full sun', value: 0 },
+          { label: 'off', value: 2 },
+          { label: 'half sun', value: 3 },
+        ],
+      },
+      {
+        id: 'type1',
+        short: 'dist od boost',
+        label: 'Gain 1 type',
+        type: 'toggle',
+        cc: 23,
+        x: 78,
+        y: 52,
+        px: 82.5,
+        py: 46.1,
+        ps: 12,
+        values: [
+          { label: 'distortion', value: 0 },
+          { label: 'overdrive', value: 2 },
+          { label: 'boost', value: 3 },
+        ],
+      },
+      {
+        id: 'preset',
+        short: 'preset',
+        label: 'Preset',
+        type: 'toggle',
+        pc: true,
+        cc: 0,
+        x: 50,
+        y: 82,
+        px: 50,
+        py: 86.5,
+        ps: 9.5,
+        values: [
+          { label: 'live', value: 0 },
+          { label: 'slot 1 · right', value: 1 },
+          { label: 'slot 2 · left', value: 2 },
+        ],
+      },
+      {
+        id: 'ch2',
+        short: 'channel 2',
+        label: 'Channel 2',
+        type: 'foot',
+        cc: 103,
+        x: 28,
+        y: 82,
+        px: 19.5,
+        py: 90,
+        ps: 21.6,
+        values: [
+          { label: 'on', value: 127 },
+          { label: 'bypass', value: 0 },
+        ],
+      },
+      {
+        id: 'ch1',
+        short: 'channel 1',
+        label: 'Channel 1',
+        type: 'foot',
+        cc: 102,
+        x: 72,
+        y: 82,
+        px: 80.5,
+        py: 90,
+        ps: 21.6,
+        values: [
+          { label: 'on', value: 127 },
+          { label: 'bypass', value: 0 },
+        ],
+      },
+      { id: 'dVol1', short: 'vol 1', label: 'Dip · volume 1', type: 'dip', back: 'L', cc: 61, values: ONOFF_VALUES },
+      { id: 'dVol2', short: 'vol 2', label: 'Dip · volume 2', type: 'dip', back: 'L', cc: 62, values: ONOFF_VALUES },
+      { id: 'dGain1', short: 'gain 1', label: 'Dip · gain 1', type: 'dip', back: 'L', cc: 63, values: ONOFF_VALUES },
+      { id: 'dGain2', short: 'gain 2', label: 'Dip · gain 2', type: 'dip', back: 'L', cc: 64, values: ONOFF_VALUES },
+      { id: 'dTone1', short: 'tone 1', label: 'Dip · tone 1', type: 'dip', back: 'L', cc: 65, values: ONOFF_VALUES },
+      { id: 'dTone2', short: 'tone 2', label: 'Dip · tone 2', type: 'dip', back: 'L', cc: 66, values: ONOFF_VALUES },
+      {
+        id: 'sweep',
+        short: 'sweep',
+        label: 'Dip · sweep',
+        type: 'dip',
+        back: 'L',
+        cc: 67,
+        values: [
+          { label: 'bottom', value: 0 },
+          { label: 'top', value: 127 },
+        ],
+      },
+      {
+        id: 'polarity',
+        short: 'polarity',
+        label: 'Dip · polarity',
+        type: 'dip',
+        back: 'L',
+        cc: 68,
+        values: [
+          { label: 'forward', value: 0 },
+          { label: 'reverse', value: 127 },
+        ],
+      },
+      { id: 'hiGain1', short: 'hi gain 1', label: 'Dip · hi gain 1', type: 'dip', back: 'R', cc: 71, values: ONOFF_VALUES },
+      { id: 'hiGain2', short: 'hi gain 2', label: 'Dip · hi gain 2', type: 'dip', back: 'R', cc: 72, values: ONOFF_VALUES },
+      { id: 'motoByp1', short: 'motobyp 1', label: 'Dip · motobyp 1', type: 'dip', back: 'R', cc: 73, values: ONOFF_VALUES },
+      { id: 'motoByp2', short: 'motobyp 2', label: 'Dip · motobyp 2', type: 'dip', back: 'R', cc: 74, values: ONOFF_VALUES },
+      { id: 'presLink1', short: 'pres link 1', label: 'Dip · presence link 1', type: 'dip', back: 'R', cc: 75, values: ONOFF_VALUES },
+      { id: 'presLink2', short: 'pres link 2', label: 'Dip · presence link 2', type: 'dip', back: 'R', cc: 76, values: ONOFF_VALUES },
+      { id: 'master', short: 'master', label: 'Dip · master', type: 'dip', back: 'R', cc: 77, values: ONOFF_VALUES },
+      { id: 'pres1', short: 'presence 1', label: 'Presence 1', type: 'knob', back: 'K', cc: 29 },
+      { id: 'pres2', short: 'presence 2', label: 'Presence 2', type: 'knob', back: 'K', cc: 27 },
+      { id: 'eom', short: 'expression', label: 'Expression (EOM)', type: 'knob', back: 'K', cc: 100 },
+    ],
+  },
 };
 
-export const DEVICE_ORDER = ['blooper', 'mood', 'elcap', 'genloss'];
+export const DEVICE_ORDER = ['blooper', 'mood', 'elcap', 'genloss', 'brothers'];
 export const CATALOG = DEVICE_ORDER;
 export const DEFAULT_RIG = ['blooper', 'mood', 'elcap'];
 export const DEFAULT_CHANNELS: Record<string, number> = {
@@ -809,6 +982,7 @@ export const DEFAULT_CHANNELS: Record<string, number> = {
   mood: 2,
   elcap: 3,
   genloss: 4,
+  brothers: 2,
 };
 
 export function valueOptionsFor(control: DeviceControl): ControlValueOption[] {

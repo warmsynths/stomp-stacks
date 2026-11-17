@@ -1,7 +1,13 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { tokens, resetAndButton, motionKeyframes } from '../styles/shared.js';
+import {
+  tokens,
+  resetAndButton,
+  motionKeyframes,
+  renderHintPopover,
+} from '../styles/shared.js';
 import { CONTROLLERS, ACTIONS, SIDE_LABELS } from '../data/controllers.js';
+import { BRAINS } from '../data/brains.js';
 import { DEVICES } from '../data/devices.js';
 import { HEX, TEXTHEX, NAMING } from '../data/naming.js';
 import type { StompStore } from '../state/store.js';
@@ -187,7 +193,7 @@ export class ControllerGraphic extends LitElement {
       ? `position:relative;width:100%;max-width:${
           ctrl.nav ? 340 : 420
         }px;margin:${ctrl.photo.screen?.digits ? 20 : 0}px auto ${
-          ctrl.isBrain && canName ? 42 : ctrl.nav ? 22 : 26
+          ctrl.isBrain && canName ? 66 : ctrl.nav ? 22 : 26
         }px;aspect-ratio:${ctrl.photo.ar};background:url(${
           ctrl.photo.src
         }) center/100% 100% no-repeat;border-radius:${
@@ -286,23 +292,43 @@ export class ControllerGraphic extends LitElement {
       idNow.auto ||
       (ctrl.nav ? 'name this preset' : `name switch ${st.selectedKey}`);
 
+    const ctrlRoleLabel = ctrl.isBrain
+      ? 'controller + brain · under your foot'
+      : 'controller · under your foot';
+    const brainObj = BRAINS[st.brainId] || BRAINS.scribble;
+
     return html`
       <div>
         <div style=${ctrlHeadRowStyle}>
-          <button
-            style="display:flex;align-items:baseline;gap:8px;flex:1;min-width:0;padding:0;text-align:left"
-            @click=${() => this.store.openControllerPicker()}
-          >
-            <span
-              style="flex:0 1 auto;min-width:0;font-size:16px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
-              >${ctrl.name}</span
-            >
-            <span
-              style="flex:none;font-size:13px;opacity:.5"
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+            <span style="display:flex;align-items:center;gap:6px">
+              <span
+                style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.55;white-space:nowrap"
+                >${ctrlRoleLabel}</span
+              >
+              ${renderHintPopover(
+                this.store,
+                'ctrl',
+                'right',
+                'the controller under your foot',
+                'pick the footswitch box you stomp on. tap any switch here to inspect or edit what it sends.'
+              )}
+            </span>
+            <button
               title="change controller"
-              >⌄</span
+              style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;padding:0;text-align:left;min-width:0"
+              @click=${() => this.store.openControllerPicker()}
             >
-          </button>
+              <span
+                style="font-size:16px;font-weight:600;letter-spacing:-.02em;text-wrap:pretty"
+                >${ctrl.name}</span
+              >
+              <span
+                style="flex:none;font-size:11px;padding:1px 7px;border-radius:9px;border:2px solid #16323d;font-weight:600"
+                >change</span
+              >
+            </button>
+          </span>
           ${!st.ctrlMin && !!ctrl.photo
             ? html`<span
                 style="flex:none;font-family:'DM Mono',monospace;font-size:10px;opacity:.55;white-space:nowrap"
@@ -462,11 +488,15 @@ export class ControllerGraphic extends LitElement {
             const name =
               ctrl.isBrain && canName
                 ? ''
-                : ctrl.nav
-                  ? SIDE_LABELS[k] || k
-                  : n > 0 && sid.name
-                    ? this.trunc(sid.name, 10)
-                    : k;
+                : ctrl.isBrain
+                  ? k === 'L'
+                    ? '‹ prev'
+                    : 'next ›'
+                  : ctrl.nav
+                    ? SIDE_LABELS[k] || k
+                    : n > 0 && sid.name
+                      ? this.trunc(sid.name, 10)
+                      : k;
             const count = n > 0 ? String(n) : '';
             const wrapStyle = ctrl.photo
               ? `position:absolute;left:${ctrl.photo.x[i]}%;top:${
@@ -513,10 +543,20 @@ export class ControllerGraphic extends LitElement {
                   : 'rgba(247,241,227,.55)'
             }`;
 
+            const isPrevDisabled = ctrl.isBrain && k === 'L' && st.bank === 0;
+            const isNextDisabled = ctrl.isBrain && k === 'R' && st.bank >= st.banks.length - 1;
+            const isNavDisabled = isPrevDisabled || isNextDisabled;
             return html`
               <button
-                style=${wrapStyle}
-                @click=${() => this.store.selectSwitch(k)}
+                data-tour=${i === 1 || (ctrl.keys.length === 1 && i === 0) ? 't1' : ''}
+                style="${wrapStyle}${isNavDisabled ? ';opacity:.35;pointer-events:none' : ''}"
+                @click=${() => {
+                  if (ctrl.isBrain) {
+                    this.store.selectBank(k === 'L' ? st.bank - 1 : st.bank + 1);
+                  } else {
+                    this.store.selectSwitch(k);
+                  }
+                }}
               >
                 <span style=${capStyle}>${count}</span>
                 <span style=${nameStyle}>${name}</span>
@@ -524,38 +564,64 @@ export class ControllerGraphic extends LitElement {
             `;
           })}
           ${devChipsOn && ctrl.isBrain && ctrl.photo
-            ? ctrl.keys.map((k, ki) =>
-                acts.map((a, ai) => {
-                  const on = st.selectedKey === k && st.action === a.id;
-                  const n = bank?.[k]?.[a.id]?.length || 0;
-                  const label = a.id === 'press' ? 'tap' : a.label;
-                  const style = `position:absolute;top:calc(100% + 8px);${
-                    ki === 0
-                      ? `left:${ai * 60}`
-                      : `right:${(acts.length - 1 - ai) * 60}`
-                  }px;width:56px;justify-content:center;z-index:6;display:flex;align-items:center;gap:4px;padding:2px 3px 2px 7px;border-radius:10px;font-size:10.5px;font-weight:600;white-space:nowrap;border:2px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;${
-                    on
-                      ? 'background:#f7c948;box-shadow:2px 2px 0 #16323d'
-                      : 'background:#fffbf0;opacity:.75'
-                  }`;
-                  const countStyle = `font-family:'DM Mono',monospace;font-size:9px;min-width:14px;text-align:center;border-radius:7px;background:${
+            ? (() => {
+                const chipBase =
+                  'position:absolute;top:calc(100% + 8px);justify-content:center;z-index:6;display:flex;align-items:center;gap:4px;padding:2px 3px 2px 7px;border-radius:10px;font-size:10.5px;font-weight:600;white-space:nowrap;border:2px solid #16323d;transition:background 150ms ease,box-shadow 150ms ease;';
+                const cntStyle = (on: boolean) =>
+                  `font-family:'DM Mono',monospace;font-size:9px;min-width:14px;text-align:center;border-radius:7px;background:${
                     on ? '#16323d' : 'rgba(22,50,61,.14)'
                   };color:${on ? '#f7c948' : '#16323d'}`;
+                const renderSlot = (
+                  k: string,
+                  a: 'press' | 'hold',
+                  label: string,
+                  title: string,
+                  pos: string,
+                  w: number
+                ) => {
+                  const on = st.selectedKey === k && st.action === a;
+                  const n = bank?.[k]?.[a]?.length || 0;
                   return html`
                     <button
-                      title="${k === 'L' ? 'left' : 'right'} switch · ${label}"
-                      style=${style}
+                      title=${title}
+                      style="${chipBase}${pos};width:${w}px;${on
+                        ? 'background:#f7c948;box-shadow:2px 2px 0 #16323d'
+                        : 'background:#fffbf0;opacity:.75'}"
                       @click=${() => {
                         this.store.selectSwitch(k);
-                        this.store.selectAction(a.id);
+                        this.store.selectAction(a);
                       }}
                     >
                       <span>${label}</span>
-                      <span style=${countStyle}>${n}</span>
+                      <span style=${cntStyle(on)}>${n}</span>
                     </button>
                   `;
-                })
-              )
+                };
+                const renderFixed = (
+                  label: string,
+                  title: string,
+                  pos: string,
+                  targetBank: number,
+                  off: boolean
+                ) => html`
+                  <button
+                    title=${title}
+                    style="${chipBase}${pos};width:58px;padding:2px 7px;border-style:dashed;background:transparent;${off
+                      ? 'opacity:.25;pointer-events:none'
+                      : 'opacity:.6'}"
+                    @click=${() => this.store.selectBank(targetBank)}
+                  >
+                    <span>${label}</span>
+                  </button>
+                `;
+                return html`
+                  ${renderFixed('‹ prev', 'tap left always steps back a preset', 'left:0', st.bank - 1, st.bank === 0)}
+                  ${renderSlot('L', 'hold', 'hold', 'hold left · an extra stack on this preset', 'left:62px', 54)}
+                  ${renderSlot('L', 'press', 'on arrival', 'fires as soon as you land on this preset', 'left:50%;transform:translateX(-50%);top:calc(100% + 34px)', 96)}
+                  ${renderSlot('R', 'hold', 'hold', 'hold right · an extra stack on this preset', 'right:62px', 54)}
+                  ${renderFixed('next ›', 'tap right always steps forward a preset', 'right:0', st.bank + 1, st.bank >= st.banks.length - 1)}
+                `;
+              })()
             : null}
         </div>
 
@@ -594,6 +660,50 @@ export class ControllerGraphic extends LitElement {
                     `;
                   })}
                 </div>
+              </div>
+            `
+          : null}
+        ${!ctrl.isBrain
+          ? html`
+              <div
+                style="display:flex;align-items:center;gap:8px;margin:${showBrainPhoto
+                  ? '2px 0 10px'
+                  : '2px 0 2px'}"
+              >
+                <span
+                  style="flex:none;width:24px;height:24px;border-radius:50%;border:2px solid #16323d;display:flex;align-items:center;justify-content:center;font-size:12px;background:#fffbf0"
+                  >↓</span
+                >
+                <span
+                  style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"
+                >
+                  <span style="display:flex;align-items:center;gap:6px">
+                    <span
+                      style="font-family:'DM Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.55"
+                      >brain · turns one stomp into the stack</span
+                    >
+                    ${renderHintPopover(
+                      this.store,
+                      'brain',
+                      'right',
+                      'the brain behind the controller',
+                      'the brain expands one stomp into the full stack of pedal messages. swap it any time to see how much each rig can hold.'
+                    )}
+                  </span>
+                  <button
+                    title="change brain"
+                    style="display:flex;align-items:center;gap:6px;padding:0;text-align:left"
+                    @click=${() => this.store.openBrainPicker()}
+                  >
+                    <span style="font-size:14px;font-weight:600"
+                      >${brainObj.full}</span
+                    >
+                    <span
+                      style="flex:none;font-size:11px;padding:1px 7px;border-radius:9px;border:2px solid #16323d;font-weight:600"
+                      >change</span
+                    >
+                  </button>
+                </span>
               </div>
             `
           : null}

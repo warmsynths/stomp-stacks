@@ -126,6 +126,15 @@ function initialState(controllerId: string): StompState {
     rigDraft: '',
     rigDeleteConfirm: false,
     bgBy: { ...DEFAULT_BG_BY },
+    backOpen: false,
+    soundQuery: '',
+    soundTags: [],
+    soundLimit: 5,
+    libBrowse: false,
+    mobileTab: 'rig',
+    tourStep: null,
+    tourDone: false,
+    tourFade: false,
   };
 }
 
@@ -883,6 +892,11 @@ export class StompStore extends EventTarget {
       sheetOpen: true,
       popoverControlId: null,
     });
+    if (st.tourStep === 1) {
+      window.setTimeout(() => {
+        if (this.state.tourStep === 1) this.tourGo(2);
+      }, 350);
+    }
 
     this.pushLog({
       text: `+ ${a.name}`,
@@ -1229,6 +1243,17 @@ export class StompStore extends EventTarget {
       // ignore
     }
     this.set({ setupStep: null });
+    try {
+      const key =
+        typeof window !== 'undefined' && window.innerWidth < 760
+          ? 'stompstacks.tour.v4.m'
+          : 'stompstacks.tour.v4';
+      if (localStorage.getItem(key) !== '1') {
+        this.startTour();
+      }
+    } catch {
+      // ignore storage errors
+    }
     const ctrl = CONTROLLERS[st.controllerId] || CONTROLLERS.chocolate;
     const brain = BRAINS[st.brainId] || BRAINS.scribble;
     this.pushLog({
@@ -1243,13 +1268,27 @@ export class StompStore extends EventTarget {
   }
 
   selectSwitch(key: string) {
-    this.set({ selectedKey: key, popoverControlId: null, edPick: null });
+    const tourPatch = this.state.tourStep === 0 ? { tourStep: 1 } : {};
+    this.set({ selectedKey: key, ...tourPatch, popoverControlId: null, edPick: null });
   }
 
   selectBank(i: number) {
     const maxBank = Math.max(0, this.state.banks.length - 1);
     const clamped = Math.max(0, Math.min(maxBank, i));
-    this.set({ bank: clamped, popoverControlId: null, jumpOpen: false, edPick: null });
+    const ctrl = CONTROLLERS[this.state.controllerId] || CONTROLLERS.chocolate;
+    const navPatch = ctrl.isBrain ? { selectedKey: 'L', action: 'press' as ActionId } : {};
+    const tourPatch =
+      ctrl.isBrain && this.state.tourStep === 0 && clamped !== this.state.bank
+        ? { tourStep: 1 }
+        : {};
+    this.set({
+      bank: clamped,
+      ...navPatch,
+      ...tourPatch,
+      popoverControlId: null,
+      jumpOpen: false,
+      edPick: null,
+    });
   }
 
   selectAction(action: ActionId) {
@@ -1257,7 +1296,125 @@ export class StompStore extends EventTarget {
   }
 
   setBrowseDevice(id: string) {
-    this.set({ browseDevice: id, popoverControlId: null, channelPickerOpen: false });
+    this.set({
+      browseDevice: id,
+      popoverControlId: null,
+      channelPickerOpen: false,
+      backOpen: false,
+    });
+  }
+
+  toggleBackOpen() {
+    this.set({
+      backOpen: !this.state.backOpen,
+      popoverControlId: null,
+      channelPickerOpen: false,
+    });
+  }
+
+  setSoundQuery(q: string) {
+    this.set({ soundQuery: q, soundLimit: 5 });
+  }
+
+  toggleSoundTag(id: string) {
+    const cur = this.state.soundTags || [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    this.set({ soundTags: next, soundLimit: 5 });
+  }
+
+  clearSoundSearch() {
+    this.set({ soundQuery: '', soundTags: [], soundLimit: 5 });
+  }
+
+  showMoreSounds() {
+    this.set({ soundLimit: (this.state.soundLimit || 5) + 5 });
+  }
+
+  setLibBrowse(libBrowse: boolean) {
+    this.set({ libBrowse });
+  }
+
+  setMobileTab(tab: 'rig' | 'pedal' | 'stack' | 'sounds') {
+    this.set({
+      mobileTab: tab,
+      libOpen: tab === 'sounds',
+      popoverControlId: null,
+    });
+  }
+
+  private _tourDimTimer: number | null = null;
+
+  startTour() {
+    this.set({
+      tourStep: 0,
+      tourFade: false,
+      settingsOpen: false,
+      mobileTab: 'rig',
+    });
+  }
+
+  endTour() {
+    if (this._tourDimTimer) {
+      window.clearTimeout(this._tourDimTimer);
+      this._tourDimTimer = null;
+    }
+    try {
+      const key =
+        window.innerWidth < 760 ? 'stompstacks.tour.v4.m' : 'stompstacks.tour.v4';
+      localStorage.setItem(key, '1');
+    } catch {
+      // ignore storage errors
+    }
+    this.set({ tourStep: null, tourDone: true, tourFade: false });
+  }
+
+  tourGo(step: number) {
+    if (this._tourDimTimer) {
+      window.clearTimeout(this._tourDimTimer);
+      this._tourDimTimer = null;
+    }
+    const clamped = Math.max(0, Math.min(3, step));
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    const isPhone = w < 760;
+    const isDesk = w >= 1100;
+    const mTabs: Array<'rig' | 'sounds' | 'stack' | 'stack'> = [
+      'rig',
+      'sounds',
+      'stack',
+      'stack',
+    ];
+    this.set({
+      tourStep: clamped,
+      tourFade: false,
+      ...(isPhone
+        ? { mobileTab: mTabs[clamped], libOpen: clamped === 1 }
+        : !isDesk
+          ? { libOpen: clamped === 1 }
+          : {}),
+    });
+  }
+
+  tourWake() {
+    if (this._tourDimTimer) {
+      window.clearTimeout(this._tourDimTimer);
+      this._tourDimTimer = null;
+    }
+    if (this.state.tourFade) {
+      this.set({ tourFade: false });
+    }
+  }
+
+  tourActivity(insideCard: boolean) {
+    if (this.state.tourStep === null || insideCard) return;
+    if (!this.state.tourFade) {
+      this.set({ tourFade: true });
+    }
+    if (this._tourDimTimer) window.clearTimeout(this._tourDimTimer);
+    this._tourDimTimer = window.setTimeout(() => {
+      if (this.state.tourStep !== null && this.state.tourFade) {
+        this.set({ tourFade: false });
+      }
+    }, 2000);
   }
 
   closePopover() {
@@ -2165,14 +2322,23 @@ export class StompStore extends EventTarget {
   ) {
     const d = rec.data;
     const ctrl = CONTROLLERS[d.controllerId] || CONTROLLERS.chocolate;
+    const existingIds = new Set((d.actions || []).map((a) => a.id));
+    const missingBuiltins = SEED_ACTIONS.filter(
+      (a) => /^b[1-5]$/.test(a.id) && !existingIds.has(a.id)
+    );
+    const mergedActions = missingBuiltins.length
+      ? [...(d.actions || []), ...JSON.parse(JSON.stringify(missingBuiltins))]
+      : d.actions;
     const patch: Partial<StompState> = {
       ...JSON.parse(JSON.stringify(d)),
+      actions: mergedActions,
       rigs,
       rigId: rec.id,
       bank: 0,
       selectedKey: ctrl.keys[0],
       action: 'press',
       browseDevice: d.rig[0] || DEVICE_ORDER[0],
+      backOpen: false,
       popoverControlId: null,
       actEdit: null,
       setsOpen: null,

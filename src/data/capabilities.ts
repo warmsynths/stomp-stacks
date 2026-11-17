@@ -1,6 +1,6 @@
 // Capability taxonomy for musical intent categories.
 
-export type CapabilityId = 'conductor' | 'buffer' | 'glue' | 'loop' | 'wear';
+export type CapabilityId = 'conductor' | 'buffer' | 'glue' | 'loop' | 'wear' | 'dirt';
 
 export interface CapabilityDef {
   id: CapabilityId;
@@ -39,6 +39,12 @@ export const CAPS: CapabilityDef[] = [
     name: 'tape & wear',
     colour: '#6d93ad',
     blurb: 'warble, flutter, saturation, magnetic age and VHS failure across the signal chain.',
+  },
+  {
+    id: 'dirt',
+    name: 'dirt',
+    colour: '#e0574a',
+    blurb: 'drive and boost, from a nudge in front of the amp to both channels stacked.',
   },
 ];
 

@@ -121,7 +121,7 @@ export class MacroPanel extends LitElement {
     const ea = build && st.actEdit ? this.store.actionById(st.actEdit) : null;
     const list = ea ? ea.steps : this.store.activeStack;
     const lim = this.store.limit();
-    const open = st.sheetOpen || !this.phone;
+    const open = true;
 
     const popDevice = HardwareRegistry.getDevice(st.browseDevice);
     const popControl =
@@ -130,9 +130,7 @@ export class MacroPanel extends LitElement {
         : null;
 
     return html`
-      <button class="grabber" @click=${() => this.store.toggleSheet()}></button>
-
-      ${!build ? this.renderAssignHeader(list, lim, open) : null}
+      ${!build ? this.renderAssignHeader(list, lim) : null}
 
       ${st.popoverControlId === 'pc' && popDevice
         ? this.renderPcPopover(popDevice, list)
@@ -148,7 +146,7 @@ export class MacroPanel extends LitElement {
     `;
   }
 
-  private renderAssignHeader(list: MacroStep[], lim: number, open: boolean) {
+  private renderAssignHeader(list: MacroStep[], lim: number) {
     const st = this.store.state;
     const ctrl = HardwareRegistry.getController(st.controllerId);
     const bank = st.banks[st.bank] || st.banks[0];
@@ -171,8 +169,13 @@ export class MacroPanel extends LitElement {
     const selectedKey = ctrl.nav
       ? SIDE_LABELS[st.selectedKey] || st.selectedKey
       : st.selectedKey;
-    const pressTitle = `${ctrl.nav ? (st.selectedKey === 'L' ? 'left' : 'right') : st.selectedKey
-      } · ${st.action === 'press' ? 'tap' : st.action}`;
+    const pressTitle = ctrl.isBrain
+      ? st.action === 'press'
+        ? 'on arrival'
+        : `hold ${st.selectedKey === 'L' ? 'left' : 'right'}`
+      : `${ctrl.nav ? (st.selectedKey === 'L' ? 'left' : 'right') : st.selectedKey} · ${
+          st.action === 'press' ? 'tap' : st.action
+        }`;
     const pressSub = `${ctrl.nav
       ? `p${String(st.bank + 1).padStart(3, '0')}`
       : `bank ${st.bank + 1}`
@@ -345,16 +348,6 @@ export class MacroPanel extends LitElement {
                 >
                   ${list.length} / ${lim}
                 </span>
-              `
-        : null}
-          ${this.phone
-        ? html`
-                <button
-                  style="width:26px;height:26px;flex:none;border-radius:50%;border:2px solid #16323d;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center"
-                  @click=${() => this.store.toggleSheet()}
-                >
-                  ${open ? '⌄' : '⌃'}
-                </button>
               `
         : null}
 
@@ -787,7 +780,7 @@ export class MacroPanel extends LitElement {
             `
         : null}
 
-        <div style="display:flex;align-items:center">
+        <div data-tour="t3" data-tour-drop="1" style="display:flex;align-items:center">
           <span
             style="flex:1;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;opacity:.5"
             >messages, in order</span
@@ -1112,6 +1105,7 @@ export class MacroPanel extends LitElement {
                       device: groupSteps[0].device,
                       control: groupSteps[0].control,
                       value: groupSteps[0].value,
+                      keys: groupSteps.map((x) => `${x.device}:${x.control}`),
                     });
                   }
                 }}

@@ -1,4 +1,5 @@
 import { css, html } from 'lit';
+import { ref } from 'lit/directives/ref.js';
 import type { StompStore } from '../state/store.js';
 
 /** Design tokens as CSS custom properties, redeclared here so shadow roots
@@ -150,6 +151,186 @@ export const motionKeyframes = css`
       transform: rotate(var(--a1));
     }
   }
+  @keyframes ghRing {
+    0%,
+    30% {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    34% {
+      opacity: 1;
+    }
+    75%,
+    100% {
+      opacity: 0;
+      transform: scale(1.9);
+    }
+  }
+  @keyframes ghDrag {
+    0% {
+      opacity: 0;
+      transform: translate(-16px, 12px);
+    }
+    18% {
+      opacity: 1;
+      transform: translate(-16px, 12px) scale(0.82);
+    }
+    62% {
+      transform: translate(16px, -12px) scale(0.82);
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(16px, -12px);
+    }
+  }
+  @keyframes ghFly {
+    0%,
+    40% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.9);
+    }
+    48% {
+      opacity: 0.95;
+      transform: translate(0, 0) scale(1);
+    }
+    85% {
+      opacity: 0.9;
+      transform: translate(var(--gx), var(--gy)) scale(0.8);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--gx), var(--gy)) scale(0.7);
+    }
+  }
+  @keyframes ghGlow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(247, 201, 72, 0);
+    }
+    40% {
+      box-shadow: 0 0 0 6px rgba(247, 201, 72, 0.75);
+    }
+  }
+  @keyframes tdFinger {
+    0% {
+      opacity: 0;
+      transform: translate(var(--fx), 46px) scale(1);
+    }
+    22% {
+      opacity: 1;
+      transform: translate(var(--fx), var(--fy)) scale(1);
+    }
+    32% {
+      transform: translate(var(--fx), var(--fy)) scale(0.78);
+    }
+    42% {
+      transform: translate(var(--fx), var(--fy)) scale(1);
+    }
+    78% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--fx), var(--fy)) scale(1);
+    }
+  }
+  @keyframes tdLit {
+    0%,
+    30% {
+      background: #fffbf0;
+      transform: scale(1);
+    }
+    36% {
+      background: #f7c948;
+      transform: scale(1.12);
+    }
+    46%,
+    88% {
+      background: #f7c948;
+      transform: scale(1);
+    }
+    100% {
+      background: #fffbf0;
+    }
+  }
+  @keyframes tdPop {
+    0%,
+    30% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.9);
+    }
+    40%,
+    88% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes tdFly {
+    0%,
+    55% {
+      opacity: 1;
+      transform: translate(0, 0) scale(1);
+    }
+    75% {
+      opacity: 0;
+      transform: translate(0, 30px) scale(0.6);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes tdRow {
+    0% {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    12%,
+    85% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes tdKnob {
+    0%,
+    40% {
+      transform: rotate(-60deg);
+    }
+    60%,
+    85% {
+      transform: rotate(50deg);
+    }
+    100% {
+      transform: rotate(-60deg);
+    }
+  }
+  @keyframes tdSend {
+    0%,
+    38% {
+      opacity: 0;
+      left: 100px;
+    }
+    45% {
+      opacity: 1;
+    }
+    72% {
+      opacity: 1;
+      left: calc(100% - 70px);
+    }
+    80%,
+    100% {
+      opacity: 0;
+      left: calc(100% - 70px);
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     * {
       animation-duration: 0.01ms !important;
@@ -193,9 +374,25 @@ export function renderHintPopover(
         }`
       : 'background:#fffbf0;opacity:.5'
   }`;
-  const cardStyle = `position:absolute;top:calc(100% + 8px);${
-    align === 'right' ? 'right:-6px' : 'left:-6px'
-  };z-index:45;width:270px;max-width:80vw;padding:12px 13px;border-radius:16px;background:#fffbf0;border:2.5px solid #16323d;box-shadow:4px 4px 0 #16323d;display:flex;flex-direction:column;gap:5px;text-align:left;white-space:normal;animation:sheetIn 170ms cubic-bezier(.23,1,.32,1)`;
+  const cardStyle = `position:fixed;z-index:95;width:270px;max-width:calc(100vw - 24px);padding:12px 13px;border-radius:16px;background:#fffbf0;border:2.5px solid #16323d;box-shadow:4px 4px 0 #16323d;display:flex;flex-direction:column;gap:5px;text-align:left;white-space:normal;animation:sheetIn 170ms cubic-bezier(.23,1,.32,1)`;
+
+  const placeCard = (el: Element | undefined) => {
+    if (!el) return;
+    const card = el as HTMLElement;
+    const anchor = card.parentElement?.querySelector('button');
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect();
+    const cw = Math.min(270, window.innerWidth - 24);
+    const ch = card.offsetHeight || 130;
+    let left = align === 'right' ? r.right - cw + 6 : r.left - 6;
+    left = Math.max(12, Math.min(window.innerWidth - cw - 12, left));
+    let top = r.bottom + 8;
+    if (top + ch > window.innerHeight - 12 && r.top - ch - 8 >= 12) {
+      top = r.top - ch - 8;
+    }
+    card.style.left = `${Math.round(left)}px`;
+    card.style.top = `${Math.round(top)}px`;
+  };
 
   return html`
     <span style="position:relative;display:inline-flex;align-items:center;flex:none">
@@ -211,7 +408,11 @@ export function renderHintPopover(
       </button>
       ${open
         ? html`
-            <div style=${cardStyle} @click=${(e: Event) => e.stopPropagation()}>
+            <div
+              style=${cardStyle}
+              @click=${(e: Event) => e.stopPropagation()}
+              ${ref(placeCard)}
+            >
               <div style="font-size:13px;font-weight:600;color:#16323d">${title}</div>
               <div style="font-size:12px;line-height:1.5;opacity:.75;color:#16323d">${body}</div>
               <button

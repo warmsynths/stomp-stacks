@@ -34,6 +34,44 @@ export class DeviceTabs extends LitElement {
         min-width: 0;
         padding: 2px;
       }
+      :host([phone]) .row {
+        flex-wrap: nowrap;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 16px;
+        border: 2.5px solid var(--ink);
+        background: var(--cream);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      :host([phone]) .row::-webkit-scrollbar {
+        display: none;
+      }
+      :host([phone]) .chip-wrap {
+        border: none;
+        border-radius: 12px;
+        box-shadow: none !important;
+        min-width: 0;
+        flex: 0 1 auto;
+      }
+      :host([phone]) .chip-btn {
+        padding: 5px 10px;
+        font-size: 12px;
+        gap: 5px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      :host([phone]) .chip-btn span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      :host([phone]) .add-chip {
+        border: 2px dashed rgba(22, 50, 61, 0.45);
+        border-radius: 12px;
+        padding: 4px 10px;
+        font-size: 13px;
+        flex: none;
+      }
       .chip-wrap {
         display: flex;
         align-items: center;
@@ -466,6 +504,7 @@ export class DeviceTabs extends LitElement {
   ];
 
   @property({ attribute: false }) store!: StompStore;
+  @property({ type: Boolean, reflect: true }) phone = false;
   private storeController!: StoreController;
 
   @state() private helpView: 'none' | 'menu' | 'sweep' | 'guide' = 'none';
@@ -547,7 +586,11 @@ export class DeviceTabs extends LitElement {
             const d = HardwareRegistry.getDevice(id);
             if (!d) return null;
             const on = active === id;
-            const peekOnThis = !on && st.peek?.device === id;
+            const peekOnThis =
+              !on &&
+              (st.peek?.keys
+                ? st.peek.keys.some((k) => k.split(':')[0] === id)
+                : st.peek?.device === id);
             const canRemove = st.rig.length > 1;
             return html`
               <span
@@ -555,21 +598,19 @@ export class DeviceTabs extends LitElement {
                 ?active=${on}
                 style=${on
                   ? `background:${d.accent};box-shadow:2px 2px 0 var(--ink)`
-                  : 'background:transparent;opacity:.6'}
+                  : peekOnThis
+                    ? 'background:#f7c948;opacity:1;animation:ring 1s cubic-bezier(.23,1,.32,1) infinite'
+                    : 'background:transparent;opacity:.6'}
               >
                 <button
                   class="chip-btn"
-                  style=${peekOnThis
-                    ? 'border-radius:18px;background:#f7c948;animation:ring 1s cubic-bezier(.23,1,.32,1) infinite'
-                    : canRemove
-                      ? 'padding-right: 4px;'
-                      : ''}
+                  style=${canRemove && !this.phone ? 'padding-right: 4px;' : ''}
                   @click=${() => this.store.setBrowseDevice(id)}
                 >
                   <span class="dot" style="background:${d.accent}"></span>
                   <span>${d.name}</span>
                 </button>
-                ${canRemove
+                ${canRemove && !this.phone
                   ? html`
                       <button
                         class="chip-remove"
@@ -598,8 +639,22 @@ export class DeviceTabs extends LitElement {
               </span>
             `;
           })}
-          <button class="add-chip" title="add a pedal to your rig" @click=${() => this.store.openAddPedal()}>+ pedal</button>
+          <button class="add-chip" title="add a pedal to your rig" @click=${() => this.store.openAddPedal()}>${this.phone ? '+' : '+ pedal'}</button>
         </div>
+
+        ${currentDevice?.back
+          ? html`
+              <button
+                class="chan-btn"
+                title="flip pedal to dip switches & MIDI-only knobs"
+                style=${st.backOpen ? 'background:var(--mustard)' : 'background:var(--card)'}
+                @click=${() => this.store.toggleBackOpen()}
+              >
+                <span style="width:10px;height:12px;border-radius:2px;background:#e0574a;border:2px solid #16323d;flex:none"></span>
+                <span style="font-size:11px;font-weight:600">dip switches</span>
+              </button>
+            `
+          : null}
 
         <button
           class="chan-btn"

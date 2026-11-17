@@ -6,7 +6,7 @@ import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { FaceMode } from '../state/types.js';
 import { HardwareRegistry } from '../data/registry.js';
-import { BG_STYLES } from './pedal-bg.js';
+import { BG_STYLES, resolveBgStyle } from './pedal-bg.js';
 
 const FACE_TABS: Array<{ id: FaceMode; label: string }> = [
   { id: 'photo', label: 'photo' },
@@ -257,7 +257,7 @@ export class SettingsModal extends LitElement {
                       ${bgDevices.map((id) => {
           const dev = HardwareRegistry.getDevice(id);
           const opts = [...BG_STYLES[id], ['off', 'off'] as const];
-          const cur = st.bgBy[id] || 'off';
+          const cur = resolveBgStyle(id, st.bgBy[id]);
           return html`
                           <div style="display:flex;flex-direction:column;gap:7px">
                             <div style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600">
@@ -288,6 +288,19 @@ export class SettingsModal extends LitElement {
                   </div>
                 `
         : null}
+
+            <div style="padding:0 24px 20px;display:flex;align-items:center;gap:12px">
+              <span style="flex:1;display:flex;flex-direction:column;gap:3px">
+                <span style="font-size:14px;font-weight:600">the tour</span>
+                <span style="font-size:12.5px;opacity:.6">four steps: pick a switch, choose what it does, check the stack, cook it up.</span>
+              </span>
+              <button
+                style="flex:none;padding:9px 14px;border-radius:16px;border:2.5px solid #16323d;background:#fffbf0;font-size:13px;font-weight:600"
+                @click=${() => this.store.startTour()}
+              >
+                show me around
+              </button>
+            </div>
 
             ${canName
         ? html`

@@ -7,7 +7,7 @@ import { HardwareRegistry } from '../data/registry.js';
 import type { StompStore } from '../state/store.js';
 import { StoreController } from '../state/store-controller.js';
 import type { MacroStep } from '../state/types.js';
-import { drawPedalBg } from './pedal-bg.js';
+import { drawPedalBg, resolveBgStyle } from './pedal-bg.js';
 
 @customElement('pedal-canvas')
 export class PedalCanvas extends LitElement {
@@ -90,7 +90,7 @@ export class PedalCanvas extends LitElement {
     ctx.globalAlpha = 1;
 
     const st = this.store.state;
-    const style = (st.bgBy || {})[st.browseDevice];
+    const style = resolveBgStyle(st.browseDevice, (st.bgBy || {})[st.browseDevice]);
     if (!W || !style || style === 'off') return;
 
     let hit = false;
@@ -139,7 +139,7 @@ export class PedalCanvas extends LitElement {
     const ea = build && st.actEdit ? this.store.actionById(st.actEdit) : null;
     const faceList = build ? (ea ? ea.steps : []) : this.store.activeStack;
 
-    const primaryControls = device.controls.filter((c) => !c.sub);
+    const primaryControls = device.controls.filter((c) => !c.sub && !c.back);
 
     const canvasStyle = `position:relative;${this.phone ? 'flex:none' : 'flex:1;min-height:0'
       };width:100%;display:flex;align-items:${this.phone ? 'flex-start' : 'center'
@@ -194,7 +194,108 @@ export class PedalCanvas extends LitElement {
           ${primaryControls.map((c) =>
           this.renderControl(c, device, drawn, faceList, build, ea)
         )}
+          ${st.backOpen && device.back
+          ? this.renderBackView(device, faceList)
+          : null}
         </div>
+      </div>
+    `;
+  }
+
+  private renderBackView(dev: Device, faceList: MacroStep[]) {
+    const st = this.store.state;
+    const groups: Array<{ label: string; key: 'L' | 'R' | 'K' }> = [
+      { label: 'control · cc 61–68', key: 'L' },
+      { label: 'customize · cc 71–77', key: 'R' },
+      { label: 'midi-only knobs', key: 'K' },
+    ];
+    return html`
+      <div
+        style="position:absolute;inset:0;z-index:14;border-radius:5cqw;background:#1d1d1d;border:2.5px solid #16323d;display:flex;flex-direction:column;gap:5cqw;padding:6cqw 5cqw;overflow:auto;color:#f4ede0;animation:sheetIn 180ms cubic-bezier(.23,1,.32,1)"
+      >
+        <div style="display:flex;flex-direction:column;gap:1.5cqw">
+          <span style="font-size:clamp(12px,4.6cqw,16px);font-weight:600">
+            ${dev.faceName} · back
+          </span>
+          <span style="font-size:clamp(9px,3.2cqw,12px);line-height:1.4;opacity:.75;text-wrap:pretty">
+            seen from behind. every switch here can be flipped over midi, so tap one to put it in the stack.
+          </span>
+        </div>
+        ${groups.map((g) => {
+          const items = dev.controls.filter((c) => c.back === g.key);
+          const cols = g.key === 'K' ? 3 : this.phone ? 4 : 8;
+          const gap = this.phone ? '3cqw 1.5cqw' : '1.2cqw';
+          return html`
+            <div style="display:flex;flex-direction:column;gap:2cqw">
+              <span
+                style="font-family:'DM Mono',monospace;font-size:clamp(8px,2.8cqw,10px);letter-spacing:.08em;text-transform:uppercase;color:#ef8a7d"
+              >
+                ${g.label}
+              </span>
+              <div
+                style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:${gap}"
+              >
+                ${items.map((c) => {
+                  const hits: number[] = [];
+                  let val: number | null = null;
+                  faceList.forEach((s, i) => {
+                    if (s.device === dev.id && s.control === c.id) {
+                      hits.push(i + 1);
+                      if (s.value != null && !isNaN(Number(s.value))) {
+                        val = Number(s.value);
+                      }
+                    }
+                  });
+                  const used = hits.length > 0;
+                  const open = st.popoverControlId === c.id;
+                  const on = val !== null && val !== 0;
+                  const knob = c.type === 'knob';
+                  const wrapStyle = `position:relative;display:flex;flex-direction:column;align-items:center;gap:1.5cqw;padding:1.2cqw 0;border-radius:2cqw;min-width:0;color:#f4ede0;transition:background 150ms ease;${
+                    open ? 'background:rgba(247,201,72,.25)' : ''
+                  }`;
+                  const capStyle = knob
+                    ? 'order:2;font-size:clamp(8px,2.8cqw,11px);font-weight:600;white-space:nowrap'
+                    : 'writing-mode:vertical-rl;transform:rotate(180deg);height:20cqw;display:flex;align-items:center;font-size:clamp(7px,2.4cqw,10px);font-weight:600;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;color:#ef8a7d';
+                  const slotStyle = knob
+                    ? `position:relative;display:block;width:12cqw;aspect-ratio:1;border-radius:50%;background:#111;border:2.5px solid ${
+                        used || open ? '#f7c948' : '#5a5a5a'
+                      };transform:rotate(${
+                        val !== null ? -135 + (270 * val) / 127 : 0
+                      }deg);transition:transform 300ms cubic-bezier(.23,1,.32,1),border-color 150ms ease`
+                    : `display:flex;flex-direction:column;justify-content:${
+                        on ? 'flex-end' : 'flex-start'
+                      };width:6.5cqw;height:12cqw;padding:.6cqw;border-radius:1cqw;background:#e0574a;transition:box-shadow 150ms ease;box-shadow:${
+                        used || open ? '0 0 0 2.5px #f7c948' : '0 0 0 1.5px #0b0b0b'
+                      }`;
+                  const nubStyle = knob
+                    ? 'position:absolute;left:50%;top:8%;width:2.5px;height:40%;margin-left:-1.25px;border-radius:2px;background:#f4ede0'
+                    : 'display:block;width:100%;height:45%;border-radius:.6cqw;background:#f4ede0';
+                  return html`
+                    <button
+                      title=${`${c.label} · cc ${c.cc}`}
+                      style=${wrapStyle}
+                      @click=${() => this.store.clickControl(c)}
+                    >
+                      <span style=${capStyle}>${c.short}</span>
+                      <span style=${slotStyle}>
+                        <span style=${nubStyle}></span>
+                      </span>
+                      ${used
+                        ? html`
+                            <span
+                              style="position:absolute;right:-1cqw;top:-1cqw;z-index:1;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#f7c948;border:2px solid #16323d;color:#16323d;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center"
+                            >
+                              ${hits.join(',')}
+                            </span>
+                          `
+                        : null}
+                    </button>
+                  `;
+                })}
+              </div>
+            </div>
+          `;
+        })}
       </div>
     `;
   }
@@ -210,9 +311,14 @@ export class PedalCanvas extends LitElement {
     const st = this.store.state;
     const peekHit =
       st.peek !== null &&
-      st.peek.device === dev.id &&
-      st.peek.control === c.id;
-    const peekHere = st.peek !== null && st.peek.device === dev.id;
+      (st.peek.keys
+        ? st.peek.keys.includes(`${dev.id}:${c.id}`)
+        : st.peek.device === dev.id && st.peek.control === c.id);
+    const peekHere =
+      st.peek !== null &&
+      (st.peek.keys
+        ? st.peek.keys.some((k) => k.split(':')[0] === dev.id)
+        : st.peek.device === dev.id);
 
     let lensHasControl = false;
     if (st.lens) {
